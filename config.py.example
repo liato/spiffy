@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+nick = 'spiffy'
+versionreply = "I'm spiffy!"
+channels = ['#spiffy', '#help']
+ownermask = '@(nsa.gov|localhost|liato.users.mgnet)'
+#Command prefix
+prefix = r'!'
+#Exclude the following modules
+exclude = ['admin']
+#Print error messages to channel
+chandebug = True
+
+networks = {"quakenet": {"host": ["irc.quakenet.org:6668", "irc.eu.quakenet.org"]},
+            "efnet": {"host": "irc.efnet.org", "nick": "SPiFFY"}
+            }
