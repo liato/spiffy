@@ -95,12 +95,32 @@ class Bot(irc.IRCClient):
             # register documentation
             if not hasattr(func, 'name'): 
                 func.name = func.__name__
-            if func.__doc__: 
+            if func.__doc__:
+                pcmd = self.config["prefix"] + func.name # pcmd = prefixed command
+        
+                if hasattr(func, "usage"):
+                    usage = chr(2) + "Usage:" + chr(2) + "\n  "
+                    usage += "\n  ".join(cmd + " - " + text
+                                         for text,cmd in func.usage)
+                    
+                    usage = usage.replace("$pcmd", pcmd)
+                    usage = usage.replace("$cmd", func.name)
+                    usage = usage.replace("$nick", self.nickname)
+                else:
+                    usage = None
+                
                 if hasattr(func, 'example'): 
-                    example = func.example
-                    example = example.replace('$nickname', self.nickname)
-                else: example = None
-                self.doc[func.name] = (func.__doc__, example)
+                    example = chr(2) + "Example:" + chr(2) + "\n  "
+                    example += "\n  ".join("\n    ".join(e for e in f)
+                                           for f in func.example)
+
+                    example = example.replace("$pcmd", pcmd)
+                    example = example.replace("$cmd", func.name)                    
+                    example = example.replace('$nick', self.nickname)
+                else:
+                    example = None
+                                  
+                self.doc[func.name] = (func.__doc__, usage, example)
             self.commands.setdefault(regexp, []).append(func)
   
         def sub(pattern, self=self): 
@@ -474,12 +494,10 @@ class UserList(object):
     
     #Return a list of channels <nick> is on
     def chans(self, nick):
-        chans = []
         nick = nick.lower()
-        for chan in self.channels:
-            if nick in self.channels[chan]:
-                chans.append(chan)
-        return chans                
+        return [chan for chan in self.channels if nick in
+                self.channels[chan]]
+    
 
 
 class BotFactory(protocol.ClientFactory):
