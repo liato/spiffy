@@ -50,28 +50,31 @@ class Bot(irc.IRCClient):
         print "Loading modules..."
         self.variables = {}
         self.doc = {}
-  
-        filenames = []
-        for fn in os.listdir(os.path.join(sys.path[0], 'modules')): 
-           if fn.endswith('.py') and not fn.startswith('_'): 
-              filenames.append(os.path.join(sys.path[0], 'modules', fn))
-
         modules = []
-        for filename in filenames: 
-           name = os.path.basename(filename)[:-3]
-           try: module = imp.load_source(name, filename)
-           except Exception, e: 
-              print >> sys.stderr, "Error loading %s: %s (in bot.py)" % (name, e)
-           else: 
-              if hasattr(module, 'setup'): 
-                 module.setup(self)
-              #print "registering %s" % name
-              self.register_module(vars(module))
-              modules.append(name)
+
+        if os.path.exists(os.path.join(sys.path[0], 'modules')):
+            filenames = []
+            for fn in os.listdir(os.path.join(sys.path[0], 'modules')): 
+               if fn.endswith('.py') and not fn.startswith('_'): 
+                  filenames.append(os.path.join(sys.path[0], 'modules', fn))
+
+            for filename in filenames: 
+               name = os.path.basename(filename)[:-3]
+               try: module = imp.load_source(name, filename)
+               except Exception, e: 
+                  print >> sys.stderr, "Error loading %s: %s (in bot.py)" % (name, e)
+               else: 
+                  if hasattr(module, 'setup'): 
+                     module.setup(self)
+                  #print "registering %s" % name
+                  self.register_module(vars(module))
+                  modules.append(name)
+            
   
         if modules: 
            print >> sys.stderr, 'Registered modules:', ', '.join(modules)
-        else: print >> sys.stderr, "Warning: Couldn't find any modules"
+        else:
+            print >> sys.stderr, "Warning: Couldn't find any modules. Does /modules exist?"
         
         self.bind_commands()
         
@@ -189,6 +192,12 @@ class Bot(irc.IRCClient):
                     msg = chr(2) + "EXCEPTION! >> " + chr(2) + str(e)
                 if msg:
                     self.msg(channel, msg)
+                    
+    def msg(self,receiver,msg):
+        lines = msg.split("\n")
+
+        for line in lines:
+            self.sendLine("PRIVMSG %s :%s" % (receiver, line))
 
     def sendLine(self, line):
         if self.encoding is not None:
