@@ -168,6 +168,30 @@ class Bot(irc.IRCClient):
 
     # callbacks for events
 
+    def modeChanged(self, user, channel, set, modes, args):
+        """Called when users or channel's modes are changed."""
+        
+        # If voice/op was added or removed, args is a tuple containing the
+        # affected nickname(s)
+        if args and channel in self.userlist.channels:
+            for user,mode in zip(args,list(modes)):
+                if mode not in "vo":
+                    continue
+                user = user.lower()
+                modedict = {"v": "+", "o": "@"}
+                
+                if user in self.userlist[channel]:
+                    currentmode = self.userlist[channel][user]["mode"]
+                    
+                    if set:
+                        if modedict[mode] not in currentmode:
+                            currentmode += modedict[mode]
+                    else:
+                        currentmode = currentmode.replace(modedict[mode],"")
+
+                    self.userlist[channel][user]["mode"] = currentmode
+
+
     def signedOn(self):
         """Called when bot has succesfully signed on to server."""
         for chan in self.channels:
@@ -180,18 +204,7 @@ class Bot(irc.IRCClient):
     def privmsg(self, user, channel, msg):
         """This will get called when the bot receives a message."""
           
-        if msg.startswith(".cmd"):
-                cmd = msg.split()[1:]
-                cmd = " ".join(cmd)
-                msg = ""
-                try:
-                    res = eval(cmd)
-                    if res != None:
-                        msg = chr(2) + "Result: " + chr(2) + str(res)
-                except Exception, e:
-                    msg = chr(2) + "EXCEPTION! >> " + chr(2) + str(e)
-                if msg:
-                    self.msg(channel, msg)
+        pass
                     
     def msg(self,receiver,msg):
         lines = msg.split("\n")
@@ -231,7 +244,7 @@ class Bot(irc.IRCClient):
                 pass
 
         command = (symbolic_to_numeric.get(command, command), command)
-        if command[0].upper() in ("JOIN", "352", "353", "KICK", "PART", "QUIT", "NICK", "MODE"):
+        if command[0].upper() in ("JOIN", "352", "353", "KICK", "PART", "QUIT", "NICK"):#, "MODE"):
             self.userlist._handleChange(prefix, command, params, text)
         if command[0] == "005":
             self.sendLine('PROTOCTL NAMESX') 
@@ -249,11 +262,8 @@ class Bot(irc.IRCClient):
 
                 match = regexp.match(text)
                 if match:
-                    print "hej1"
                     input = CommandInput(self, prefix, command, params, text, match, line)
-                    print "hej2"
                     bot = QuickReplyWrapper(self, input)
-                    print "hej3"
                     #self.call(func, bot, input)
                     targs = (func, bot, input)
                     t = threading.Thread(target=self.call, args=targs)
@@ -408,12 +418,6 @@ class UserList(object):
                     if nick != newnick.lower():
                         del self.channels[chan][nick] 
 
-        #MODE
-        elif command.lower() == "mode":
-            mode = params[1]
-            chan = params[0].lower()
-            if 'o' or 'v' in mode:
-                self.bot.sendLine('NAMES %s' % chan)
 
     #Is <nick> on <chan>?
     def ison(self, nick, chan):
