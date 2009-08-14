@@ -1,4 +1,4 @@
-import time, imp, os, sys, re, threading, codecs
+import time, imp, os, sys, re, threading, codecs, datetime
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric
 from twisted.internet import reactor, protocol
@@ -46,6 +46,7 @@ class Bot(irc.IRCClient):
         self.encoding = 'utf-8'
         self.userlist = UserList(self)
         self.logger = IRCLogger(self, "plaintext")
+        self.config['logevents'] = [s.upper() for s in self.config['logevents']]
         
 
         print "Loading modules..."
@@ -234,6 +235,17 @@ class Bot(irc.IRCClient):
     def lineReceived(self, line):
         line = lowDequote(line)
         try:
+            line = line.decode('utf-8')
+        except UnicodeDecodeError: 
+            try:
+                line = line.decode('iso-8859-1')
+            except UnicodeDecodeError: 
+                try:
+                    line = line.decode('cp1252')
+                except UnicodeDecodeError:
+                    line = line.decode('utf-8', 'ignore')
+
+        try:
             prefix, command, params, text = parsemsg(line)
             if numeric_to_symbolic.has_key(command):
                 command = numeric_to_symbolic[command]
@@ -264,14 +276,7 @@ class Bot(irc.IRCClient):
         print prefix, command, params, text
         print "\n"
 
-        # stuff for logging, should maybe be put in a method of its own
-        
-        if command[0].upper() == "PRIVMSG":
-            self.logger.log(sourcesplit(prefix)[0], params[0], "PRIVMSG", text)
-        elif command[0].upper() == "MODE":
-            self.logger.log(sourcesplit(prefix)[0], params[0], "MODE", " ".join(params[1:]))
-         
-        # end logging stuff
+        self.handleLogging(prefix, command, params, text)
         
         items = self.commands.items()
         for regexp, funcs in items: 
@@ -303,7 +308,13 @@ class Bot(irc.IRCClient):
             #    self.msg(input.sender, str(e))
             #self.error(input)
 
-
+    def handleLogging(self, prefix, command, params, text):
+        if not command[0].upper() in self.config['logevents']:
+            return
+        if command[0].upper() == "PRIVMSG":
+            self.logger.log(sourcesplit(prefix)[0], params[0].lower(), "PRIVMSG", text)
+        elif command[0].upper() == "MODE":
+            self.logger.log(sourcesplit(prefix)[0], params[0].lower(), "MODE", " ".join(params[1:]))
 
     def ctcpQuery_VERSION(self, user, channel, data):
         nick = user.split("!",1)[0]
@@ -515,7 +526,7 @@ class IRCLogger(object):
     def __init__(self, bot, logtype, logdir = None):
         self.bot = bot
         self.logdir = logdir or "logs"
-        
+        self.lastmsg = {}        
         if logtype == "whatever, sqlite3/mysql in the future":
             pass
         elif logtype == "plaintext":
@@ -528,11 +539,10 @@ class IRCLogger(object):
         logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + channel + ".log")
         timestamp = time.strftime("[%H:%M:%S]")
 
-        text = text.decode("utf-8") # yay for unicode!
-        
         logs = getattr(self.bot, "logs", {})  
         if channel not in logs:
             # nothing has been logged from this chan yet, must open file
+            self.lastmsg[channel] = datetime.date.today()
             f = codecs.open(logpath,"a","utf-8")
             f.write("\r\nSession Start: %s\r\n" % time.strftime("%a %b %d %H:%M:%S %Y"))
             f.write("Session Ident: %s\r\n" % channel)
@@ -546,6 +556,9 @@ class IRCLogger(object):
             
             logs[channel] = f
 
+        if datetime.date.today() > self.lastmsg[channel]:
+            self.lastmsg[channel] = datetime.date.today()
+            logs[channel].write("# Start of new day, %s.\r\n" % self.lastmsg[channel].isoformat())
         if event.upper() == "PRIVMSG":
             logs[channel].write("%s <%s> %s\r\n" % (timestamp, sender, text))
         elif event.upper() == "MODE":

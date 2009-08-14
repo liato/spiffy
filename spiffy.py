@@ -18,7 +18,7 @@ if __name__ == '__main__':
     if hasattr(config, 'networks'):
         for network in config.networks:
             serverconfig = {}
-            config_defaults = {'prefix': r'\.', 'nick': 'spiffy', 'chandebug': True, 'channels': []}
+            config_defaults = {'prefix': r'\.', 'nick': 'spiffy', 'chandebug': True, 'channels': [], 'logevents': ['PRIVMSG', 'JOIN', 'PART', 'MODE', 'TOPIC', 'KICK', 'QUIT', 'NOTICE']}
             for x in config_defaults:
                 serverconfig[x] = config_defaults[x]
             for x in config.__dict__:
