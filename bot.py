@@ -1,4 +1,4 @@
-import time, imp, os, sys, re, threading
+import time, imp, os, sys, re, threading, codecs
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric
 from twisted.internet import reactor, protocol
@@ -45,6 +45,7 @@ class Bot(irc.IRCClient):
         self.verbose = True
         self.encoding = 'utf-8'
         self.userlist = UserList(self)
+        self.logger = IRCLogger(self, "plaintext")
         
 
         print "Loading modules..."
@@ -244,8 +245,8 @@ class Bot(irc.IRCClient):
         
     def handleCommand(self, command, prefix, params, text, line):
         """Determine the function to call for the given command and call
-        it with the given arguments.
-        """
+        it with the given arguments."""
+        
         method = getattr(self, "irc_%s" % command, None)
         if method is not None:
             try:
@@ -263,6 +264,15 @@ class Bot(irc.IRCClient):
         print prefix, command, params, text
         print "\n"
 
+        # stuff for logging, should maybe be put in a method of its own
+        
+        if command[0].upper() == "PRIVMSG":
+            self.logger.log(sourcesplit(prefix)[0], params[0], "PRIVMSG", text)
+        elif command[0].upper() == "MODE":
+            self.logger.log(sourcesplit(prefix)[0], params[0], "MODE", " ".join(params[1:]))
+         
+        # end logging stuff
+        
         items = self.commands.items()
         for regexp, funcs in items: 
             for func in funcs:
@@ -499,13 +509,52 @@ class UserList(object):
         nick = nick.lower()
         return [chan for chan in self.channels if nick in
                 self.channels[chan]]
-    
+
+
 class IRCLogger(object):
-    def __ini__(self):
-        pass
+    def __init__(self, bot, logtype, logdir = None):
+        self.bot = bot
+        self.logdir = logdir or "logs"
+        
+        if logtype == "whatever, sqlite3/mysql in the future":
+            pass
+        elif logtype == "plaintext":
+            self.log = self.plaintextlog
+            if not os.path.exists(self.logdir):
+                os.mkdir(self.logdir)
+        
     
-    def log(self, sender, event, text):
-        pass
+    def plaintextlog(self, sender, channel, event, text):
+        logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + channel + ".log")
+        timestamp = time.strftime("[%H:%M:%S]")
+
+        text = text.decode("utf-8") # yay for unicode!
+        
+        logs = getattr(self.bot, "logs", {})  
+        if channel not in logs:
+            # nothing has been logged from this chan yet, must open file
+            f = codecs.open(logpath,"a","utf-8")
+            f.write("\r\nSession Start: %s\r\n" % time.strftime("%a %b %d %H:%M:%S %Y"))
+            f.write("Session Ident: %s\r\n" % channel)
+            f.write("%s * Now talking in %s\r\n" % (timestamp, channel))
+            
+            # not sure how to get this info, but it's necessary if we strive for
+            # compatibility with the mIRC log format (to allow the use of third
+            # party log analyzers for stats and the like)
+            f.write("%s * Topic is 'XXXXXXXXXXXX'\r\n" % timestamp)
+            f.write("%s * Set by XXXXXXX on XXXXXXX\r\n" % timestamp)
+            
+            logs[channel] = f
+
+        if event.upper() == "PRIVMSG":
+            logs[channel].write("%s <%s> %s\r\n" % (timestamp, sender, text))
+        elif event.upper() == "MODE":
+            logs[channel].write("%s * %s sets mode: %s\r\n" % (timestamp, sender, text))
+
+        logs[channel].flush()
+
+        self.bot.logs = logs
+            
 
 class BotFactory(protocol.ClientFactory):
      # the class of the protocol to build when new connection is made
