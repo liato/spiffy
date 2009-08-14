@@ -503,6 +503,9 @@ class UserList(object):
 class IRCLogger(object):
     def __ini__(self):
         pass
+    
+    def log(self, sender, event, text):
+        pass
 
 class BotFactory(protocol.ClientFactory):
      # the class of the protocol to build when new connection is made
