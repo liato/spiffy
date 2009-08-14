@@ -254,7 +254,7 @@ class Bot(irc.IRCClient):
                 pass
 
         command = (symbolic_to_numeric.get(command, command), command)
-        if command[0].upper() in ("JOIN", "352", "353", "KICK", "PART", "QUIT", "NICK"):#, "MODE"):
+        if command[0].upper() in ("JOIN", "352", "353", "KICK", "PART", "QUIT", "NICK"):
             self.userlist._handleChange(prefix, command, params, text)
         if command[0] == "005":
             self.sendLine('PROTOCTL NAMESX') 
@@ -500,7 +500,9 @@ class UserList(object):
         return [chan for chan in self.channels if nick in
                 self.channels[chan]]
     
-
+class IRCLogger(object):
+    def __ini__(self):
+        pass
 
 class BotFactory(protocol.ClientFactory):
      # the class of the protocol to build when new connection is made
