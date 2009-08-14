@@ -2,7 +2,6 @@ import time, imp, os, sys, re, threading
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric
 from twisted.internet import reactor, protocol
-#from twisted.python import log
 
 def parsemsg(s):
     """Breaks a message from an IRC server into its prefix, command, arguments and text.
@@ -27,6 +26,9 @@ def sourcesplit(source):
     return m.groups()
 
 class Bot(irc.IRCClient): 
+    class BadInputError(Exception):
+        def __str__(self):
+            return repr(self)
 
     def connectionMade(self):
         config = self.factory.config
@@ -37,9 +39,7 @@ class Bot(irc.IRCClient):
         self.username = config.get('user', self.nickname)
         self.realname = config.get('name', self.nickname)
         self.versionName = config.get('versionreply', None)
-  
         self.channels = config.get('channels', [])
-        self.stack = []
         self.config = config
         self.connections = connections
         self.verbose = True
@@ -66,7 +66,6 @@ class Bot(irc.IRCClient):
                else: 
                   if hasattr(module, 'setup'): 
                      module.setup(self)
-                  #print "registering %s" % name
                   self.register_module(vars(module))
                   modules.append(name)
             
@@ -79,7 +78,7 @@ class Bot(irc.IRCClient):
         self.bind_commands()
         
         irc.IRCClient.connectionMade(self)
-        print "connected at %s" % time.asctime(time.localtime(time.time()))
+        print "Connected at %s" % time.asctime(time.localtime(time.time()))
         
     def register_module(self, variables): 
         # This is used by reload.py, hence it being methodised
@@ -90,8 +89,8 @@ class Bot(irc.IRCClient):
     def bind_commands(self): 
         self.commands = {}
         
-        def bind(self, priority, regexp, func): 
-            print priority, regexp.pattern.encode('utf-8'), func
+        def bind(self, regexp, func): 
+            print regexp.pattern.encode('utf-8'), func
             # register documentation
             if not hasattr(func, 'name'): 
                 func.name = func.__name__
@@ -99,7 +98,7 @@ class Bot(irc.IRCClient):
                 pcmd = self.config["prefix"] + func.name # pcmd = prefixed command
         
                 if hasattr(func, "usage"):
-                    usage = chr(2) + "Usage:" + chr(2) + "\n  "
+                    usage = "\x02Usage:\x02\n  "
                     usage += "\n  ".join(cmd + " - " + text
                                          for text,cmd in func.usage)
                     
@@ -110,7 +109,7 @@ class Bot(irc.IRCClient):
                     usage = None
                 
                 if hasattr(func, 'example'): 
-                    example = chr(2) + "Example:" + chr(2) + "\n  "
+                    example = "\x02Example:\x02\n  "
                     example += "\n  ".join("\n    ".join(e for e in f)
                                            for f in func.example)
 
@@ -130,12 +129,6 @@ class Bot(irc.IRCClient):
   
         for name, func in self.variables.iteritems(): 
             # print name, func
-            if not hasattr(func, 'priority'): 
-                func.priority = 'medium'
-   
-            if not hasattr(func, 'thread'): 
-                func.thread = True
-   
             if not hasattr(func, 'event'): 
                 func.event = 'PRIVMSG'
             else:
@@ -145,7 +138,7 @@ class Bot(irc.IRCClient):
                 if isinstance(func.rule, str): 
                     pattern = sub(func.rule)
                     regexp = re.compile(pattern)
-                    bind(self, func.priority, regexp, func)
+                    bind(self, regexp, func)
     
                 if isinstance(func.rule, tuple): 
                     # 1) e.g. ('$nick', '(.*)')
@@ -153,18 +146,16 @@ class Bot(irc.IRCClient):
                         prefix, pattern = func.rule
                         prefix = sub(prefix)
                         regexp = re.compile(prefix + pattern, re.IGNORECASE)
-                        bind(self, func.priority, regexp, func)
+                        bind(self, regexp, func)
      
                     # 2) e.g. (['p', 'q'], '(.*)')
                     elif len(func.rule) == 2 and isinstance(func.rule[0], list): 
                         prefix = self.config['prefix']
                         commands, pattern = func.rule
                         for command in commands:
-                            #command = r'(%s)(?: +(?:%s))?' % (command, pattern)
-                            #command = r'(%s)|(%s)(?: +(?:%s))' % (command,command, pattern)
                             command = r'(%s)(?: +(?:%s))?$' % (command, pattern)
                             regexp = re.compile(prefix + command, re.IGNORECASE)
-                            bind(self, func.priority, regexp, func)
+                            bind(self, regexp, func)
      
                     # 3) e.g. ('$nick', ['p', 'q'], '(.*)')
                     elif len(func.rule) == 3: 
@@ -173,18 +164,18 @@ class Bot(irc.IRCClient):
                         for command in commands: 
                             command = r'(%s) +' % command
                             regexp = re.compile(prefix + command + pattern, re.IGNORECASE)
-                            bind(self, func.priority, regexp, func)
+                            bind(self, regexp, func)
    
             if hasattr(func, 'commands'): 
                 for command in func.commands: 
                     template = r'^%s(%s)(?: +(.*))?$'
                     pattern = template % (self.config['prefix'], command)
                     regexp = re.compile(pattern, re.IGNORECASE)
-                    bind(self, func.priority, regexp, func)        
+                    bind(self, regexp, func)        
         
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
-        print "disconnected at %s" % time.asctime(time.localtime(time.time()))
+        print "Disconnected at %s" % time.asctime(time.localtime(time.time()))
 
     # callbacks for events
 
@@ -193,12 +184,18 @@ class Bot(irc.IRCClient):
         
         # If voice/op was added or removed, args is a tuple containing the
         # affected nickname(s)
+        modedict = {"v": "+", #voice
+                    "o": "@", #op
+                    "h": "%", #halfop (used by Unreal)
+                    "a": "&", #admin (used by Unreal)
+                    "q": "~", #owner (used by Unreal)
+                    "!": "!"  #service (used by KineIRCD)
+                    }
         if args and channel in self.userlist.channels:
-            for user,mode in zip(args,list(modes)):
-                if mode not in "vo":
+            for user, mode in zip(args,list(modes)):
+                if mode not in modedict.keys():
                     continue
                 user = user.lower()
-                modedict = {"v": "+", "o": "@"}
                 
                 if user in self.userlist[channel]:
                     currentmode = self.userlist[channel][user]["mode"]
@@ -221,14 +218,8 @@ class Bot(irc.IRCClient):
         """This will get called when the bot joins the channel."""
         print "[I have joined %s]" % channel
 
-    def privmsg(self, user, channel, msg):
-        """This will get called when the bot receives a message."""
-          
-        pass
-                    
     def msg(self,receiver,msg):
         lines = msg.split("\n")
-
         for line in lines:
             self.sendLine("PRIVMSG %s :%s" % (receiver, line))
 
@@ -256,7 +247,6 @@ class Bot(irc.IRCClient):
         it with the given arguments.
         """
         method = getattr(self, "irc_%s" % command, None)
-        #print command, prefix, params
         if method is not None:
             try:
                 method(prefix or '', text and params+[text] or params)
@@ -272,11 +262,10 @@ class Bot(irc.IRCClient):
         print line
         print prefix, command, params, text
         print "\n"
+
         items = self.commands.items()
-        #print "items: %s" % len(items)
         for regexp, funcs in items: 
             for func in funcs:
-                #print "func.event: %s; event: %s" % (func.event, event)
                 if not func.event in command:
                     continue
 
@@ -284,18 +273,24 @@ class Bot(irc.IRCClient):
                 if match:
                     input = CommandInput(self, prefix, command, params, text, match, line)
                     bot = QuickReplyWrapper(self, input)
-                    #self.call(func, bot, input)
                     targs = (func, bot, input)
                     t = threading.Thread(target=self.call, args=targs)
                     t.start()
 
     def call(self, func, bot, input):
-        #try:
+        try:
             func(bot, input)
+        except self.BadInputError, e:
+            if input.sender:
+                if self.doc[func.__name__][1]:
+                    self.msg(input.sender, self.doc[func.__name__][1])
+                else:
+                    self.msg(input.sender, 'Use %shelp %s for more info on how to use this command.'
+                             % (self.config.get('prefix',''), func.__name__))
         #except Exception, e:
-        #    print "Error: %s" % str(e)
-        #    if self.config.get('chandebug', True):
-        #        self.msg(input.sender, str(e))
+            #print "Error: %s" % str(e)
+            #if self.config.get('chandebug', True):
+            #    self.msg(input.sender, str(e))
             #self.error(input)
 
 
@@ -329,7 +324,14 @@ class CommandInput(object):
             return False
         if re.search(self._bot.config['ownermask'], self.nick+'!'+self.user+'@'+self.host, re.IGNORECASE):
             return True
-        return False        
+        return False
+    
+    def isprivate(self):
+        """Returns False if the message was sent to a channel and True if
+        the message was sent directly to the bot."""
+        if self.sender == self.nick:
+            return True
+        return False
             
 class QuickReplyWrapper(object): 
     def __init__(self, bot, input): 

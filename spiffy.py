@@ -14,12 +14,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     config = imp.load_source('config', config_name)
-    config.filename = config_name
     
     if hasattr(config, 'networks'):
         for network in config.networks:
-            #serverconfig = config.networks[network]
-            #serverconfig = config.__dict__.copy()
             serverconfig = {}
             config_defaults = {'prefix': r'\.', 'nick': 'spiffy', 'chandebug': True, 'channels': []}
             for x in config_defaults:

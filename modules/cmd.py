@@ -2,12 +2,13 @@ def cmd(self, input):
     """Admin-only command, runs the supplied argument as Python code within the bot itself."""
 
     if input.isowner():
-        cmd = input.groups()[1]
-        
+        cmd = input.group(2)
+        if not cmd:
+            raise self.BadInputError()
         try:
-            msg = chr(2) + "Result: " + chr(2) + str(eval(cmd))
+            msg = "\x02Result: \x02" + str(eval(cmd))
         except Exception, e:
-            msg = chr(2) + "Exception raised: " + chr(2) + str(e)
+            msg = "\x02Exception raised: \x02" + str(e)
 
         self.say(msg)
 
