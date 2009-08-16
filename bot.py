@@ -1,7 +1,16 @@
-import time, imp, os, sys, re, threading, codecs, datetime
+import time
+import imp
+import os
+import sys
+import re
+import threading
+import codecs
+import datetime
+
 from twisted.words.protocols import irc
-from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric
+from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric, split
 from twisted.internet import reactor, protocol
+
 
 def parsemsg(s):
     """Breaks a message from an IRC server into its prefix, command, arguments and text.
@@ -19,167 +28,180 @@ def parsemsg(s):
     command = args.pop(0)
     return prefix, command, args, text
 
+
 def sourcesplit(source):
     """Split nick!user@host and return a 3-value tuple."""
     r = re.compile(r'([^!]*)!?([^@]*)@?(.*)')
     m = r.match(source)
     return m.groups()
 
-class Bot(irc.IRCClient): 
+
+class Bot(irc.IRCClient):
+    
     class BadInputError(Exception):
         def __str__(self):
             return repr(self)
 
     def connectionMade(self):
-        config = self.factory.config
-        connections = self.factory.connections
-        connections[config['network']] = self
-  
-        self.nickname = config.get('nick', 'spiffy')
-        self.username = config.get('user', self.nickname)
-        self.realname = config.get('name', self.nickname)
-        self.versionName = config.get('versionreply', None)
-        self.channels = config.get('channels', [])
-        self.config = config
-        self.connections = connections
+        self.config = self.factory.config
+        self.connections = self.factory.connections
+        self.connections[self.config['network']] = self
+        self.nickname = self.config.get('nick', 'spiffy')
+        self.username = self.config.get('user', self.nickname)
+        self.realname = self.config.get('name', self.nickname)
+        self.logger = IRCLogger(self, "plaintext")
+        self.userlist = UserList(self)
+        self.config['logevents'] = [s.upper() for s in self.config['logevents']]
         self.verbose = True
         self.encoding = 'utf-8'
-        self.userlist = UserList(self)
-        self.logger = IRCLogger(self, "plaintext")
-        self.config['logevents'] = [s.upper() for s in self.config['logevents']]
+        self.split = split #Make the split function accessible for modules
         
+        self.loadModules()
+        irc.IRCClient.connectionMade(self)
+        print "Connected at %s" % time.asctime(time.localtime(time.time()))
 
+        
+    def loadModules(self):
         print "Loading modules..."
-        self.variables = {}
-        self.doc = {}
+        self.modules = {} #Modules loaded from the modules directory.
+        self.doc = {} #Documentation for modules.
+        self.aliases = {} #Aliases for modules.
         modules = []
-
         if os.path.exists(os.path.join(sys.path[0], 'modules')):
             filenames = []
             for fn in os.listdir(os.path.join(sys.path[0], 'modules')): 
-               if fn.endswith('.py') and not fn.startswith('_'): 
-                  filenames.append(os.path.join(sys.path[0], 'modules', fn))
-
-            for filename in filenames: 
-               name = os.path.basename(filename)[:-3]
-               try: module = imp.load_source(name, filename)
-               except Exception, e: 
-                  print >> sys.stderr, "Error loading %s: %s (in bot.py)" % (name, e)
-               else: 
-                  if hasattr(module, 'setup'): 
-                     module.setup(self)
-                  self.register_module(vars(module))
-                  modules.append(name)
-            
-  
+                if fn.endswith('.py') and not fn.startswith('_'): 
+                    filenames.append(os.path.join(sys.path[0], 'modules', fn))
+            for filename in filenames:
+                name = os.path.basename(filename)[:-3]
+                try:
+                    self.loadModule(filename)
+                except Exception, e: 
+                    print >> sys.stderr, "Error loading %s: %s (in bot.py)" % (name, e)
+                else:
+                    modules.append(name)
         if modules: 
-           print >> sys.stderr, 'Registered modules:', ', '.join(modules)
+           print 'Registered modules:', ', '.join(modules)
         else:
             print >> sys.stderr, "Warning: Couldn't find any modules. Does /modules exist?"
-        
-        self.bind_commands()
-        
-        irc.IRCClient.connectionMade(self)
-        print "Connected at %s" % time.asctime(time.localtime(time.time()))
-        
-    def register_module(self, variables): 
-        # This is used by reload.py, hence it being methodised
-        for name, obj in variables.iteritems(): 
-            if hasattr(obj, 'commands') or hasattr(obj, 'rule'): 
-                self.variables[name] = obj
 
-    def bind_commands(self): 
-        self.commands = {}
-        
-        def bind(self, regexp, func): 
-            print regexp.pattern.encode('utf-8'), func
+    def loadModule(self, filename):
+
+        def bind(self, regexp, func, commands = None): 
             # register documentation
-            if not hasattr(func, 'name'): 
-                func.name = func.__name__
-            if func.__doc__:
-                pcmd = self.config["prefix"] + func.name # pcmd = prefixed command
-        
-                if hasattr(func, "usage"):
-                    usage = "\x02Usage:\x02\n  "
-                    usage += "\n  ".join(cmd + " - " + text
-                                         for text,cmd in func.usage)
-                    
-                    usage = usage.replace("$pcmd", pcmd)
-                    usage = usage.replace("$cmd", func.name)
-                    usage = usage.replace("$nick", self.nickname)
-                else:
-                    usage = None
-                
-                if hasattr(func, 'example'): 
-                    example = "\x02Example:\x02\n  "
-                    example += "\n  ".join("\n    ".join(e for e in f)
-                                           for f in func.example)
+            pcmd = self.config["prefix"] + func.name # pcmd = prefixed command
 
-                    example = example.replace("$pcmd", pcmd)
-                    example = example.replace("$cmd", func.name)                    
-                    example = example.replace('$nick', self.nickname)
-                else:
-                    example = None
-                                  
-                self.doc[func.name] = (func.__doc__, usage, example)
-            self.commands.setdefault(regexp, []).append(func)
+            if func.__doc__:
+                doc = func.__doc__
+            else:
+                doc = None
+
+            if hasattr(func, "usage"):
+                usage = "\x02Usage:\x02\n  "
+                usage += "\n  ".join(cmd + " - " + text
+                                     for text,cmd in func.usage)
+                
+                usage = usage.replace("$pcmd", pcmd)
+                usage = usage.replace("$cmd", func.name)
+                usage = usage.replace("$nick", self.nickname)
+            else:
+                usage = None
+            
+            if hasattr(func, 'example'): 
+                example = "\x02Example:\x02\n  "
+                example += "\n  ".join("\n    ".join(e for e in f)
+                                       for f in func.example)
+
+                example = example.replace("$pcmd", pcmd)
+                example = example.replace("$cmd", func.name)                    
+                example = example.replace('$nick', self.nickname)
+            else:
+                example = None
+
+            for command in commands or []:
+                self.aliases[command.lower()] = func.name
+            if func.name in commands:
+                commands.remove(func.name)
+            if commands:
+                aliases = "\x02Aliases for the %s command:\x02\n  " % func.name
+                aliases += ", ".join(commands)
+            else:
+                aliases = None
+            
+            self.doc[func.name] = (doc, usage, example, aliases)
+            #self.modules.setdefault(regexp, []).append(func)
+            if func.name in self.modules:
+                self.modules[func.name].setdefault(regexp, []).append(func)
+            else:
+                self.modules[func.name] = {regexp: [func]}
   
         def sub(pattern, self=self): 
             # These replacements have significant order
             pattern = pattern.replace('$nickname', self.nickname)
             return pattern.replace('$nick', r'%s[,:] +' % self.nickname)
-  
-        for name, func in self.variables.iteritems(): 
-            # print name, func
-            if not hasattr(func, 'event'): 
-                func.event = 'PRIVMSG'
-            else:
-                func.event = func.event.upper()
-   
-            if hasattr(func, 'rule'): 
-                if isinstance(func.rule, str): 
-                    pattern = sub(func.rule)
-                    regexp = re.compile(pattern)
-                    bind(self, regexp, func)
-    
-                if isinstance(func.rule, tuple): 
-                    # 1) e.g. ('$nick', '(.*)')
-                    if len(func.rule) == 2 and isinstance(func.rule[0], str): 
-                        prefix, pattern = func.rule
-                        prefix = sub(prefix)
-                        regexp = re.compile(prefix + pattern, re.IGNORECASE)
+
+        name = os.path.basename(filename)[:-3]
+        module = imp.load_source(name, filename)
+        if hasattr(module, 'setup'): 
+           module.setup(self)
+        for name, func in vars(module).iteritems(): 
+            if hasattr(func, 'commands') or hasattr(func, 'rule'):
+                if not hasattr(func, 'name'): 
+                    func.name = func.__name__
+                func.name = func.name.lower()
+                if func.name in self.modules:
+                    del self.modules[func.name]
+                
+                if not hasattr(func, 'event'):
+                    func.event = 'PRIVMSG'
+                else:
+                    func.event = func.event.upper()
+       
+                if hasattr(func, 'rule'):
+                    # 0) e.g. '(hi|hey) $nick'
+                    if isinstance(func.rule, str): 
+                        pattern = sub(func.rule)
+                        regexp = re.compile(pattern)
                         bind(self, regexp, func)
-     
-                    # 2) e.g. (['p', 'q'], '(.*)')
-                    elif len(func.rule) == 2 and isinstance(func.rule[0], list): 
-                        prefix = self.config['prefix']
-                        commands, pattern = func.rule
-                        for command in commands:
-                            command = r'(%s)(?: +(?:%s))?$' % (command, pattern)
-                            regexp = re.compile(prefix + command, re.IGNORECASE)
+        
+                    elif isinstance(func.rule, tuple): 
+                        # 1) e.g. ('$nick', '(.*)')
+                        if len(func.rule) == 2 and isinstance(func.rule[0], str): 
+                            prefix, pattern = func.rule
+                            prefix = sub(prefix)
+                            regexp = re.compile(prefix + pattern, re.IGNORECASE)
                             bind(self, regexp, func)
-     
-                    # 3) e.g. ('$nick', ['p', 'q'], '(.*)')
-                    elif len(func.rule) == 3: 
-                        prefix, commands, pattern = func.rule
-                        prefix = sub(prefix)
-                        for command in commands: 
-                            command = r'(%s) +' % command
-                            regexp = re.compile(prefix + command + pattern, re.IGNORECASE)
-                            bind(self, regexp, func)
-   
-            if hasattr(func, 'commands'): 
-                for command in func.commands: 
-                    template = r'^%s(%s)(?: +(.*))?$'
-                    pattern = template % (self.config['prefix'], command)
-                    regexp = re.compile(pattern, re.IGNORECASE)
-                    bind(self, regexp, func)        
+         
+                        # 2) e.g. (['p', 'q'], '(.*)')
+                        elif len(func.rule) == 2 and isinstance(func.rule[0], list): 
+                            prefix = self.config['prefix']
+                            commands, pattern = func.rule
+                            for command in commands:
+                                command = r'(%s)(?: +(?:%s))?$' % (command, pattern)
+                                regexp = re.compile(prefix + command, re.IGNORECASE)
+                                bind(self, regexp, func, commands)
+         
+                        # 3) e.g. ('$nick', ['p', 'q'], '(.*)')
+                        elif len(func.rule) == 3: 
+                            prefix, commands, pattern = func.rule
+                            prefix = sub(prefix)
+                            for command in commands: 
+                                command = r'(%s) +' % command
+                                regexp = re.compile(prefix + command + pattern, re.IGNORECASE)
+                                bind(self, regexp, func, commands)
+       
+                if hasattr(func, 'commands'): 
+                    for command in func.commands: 
+                        template = r'^%s(%s)(?: +(.*))?$'
+                        pattern = template % (self.config['prefix'], command)
+                        regexp = re.compile(pattern, re.IGNORECASE)
+                        bind(self, regexp, func, func.commands)
+        
+        return module
         
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
         print "Disconnected at %s" % time.asctime(time.localtime(time.time()))
-
-    # callbacks for events
 
     def modeChanged(self, user, channel, set, modes, args):
         """Called when users or channel's modes are changed."""
@@ -210,10 +232,10 @@ class Bot(irc.IRCClient):
 
                     self.userlist[channel][user]["mode"] = currentmode
 
-
     def signedOn(self):
         """Called when bot has succesfully signed on to server."""
-        for chan in self.channels:
+        channels = self.config.get('channels', [])
+        for chan in channels:
             self.join(chan)
 
     def joined(self, channel):
@@ -230,7 +252,6 @@ class Bot(irc.IRCClient):
             if isinstance(line, unicode):
                 line = line.encode(self.encoding)
         self.transport.write("%s%s%s" % (line, chr(015), chr(012)))
-        
 
     def lineReceived(self, line):
         line = lowDequote(line)
@@ -252,9 +273,7 @@ class Bot(irc.IRCClient):
             self.handleCommand(command, prefix, params, text, line)
         except Exception, e:
             print "Error: %s" % e
-        
 
-        
     def handleCommand(self, command, prefix, params, text, line):
         """Determine the function to call for the given command and call
         it with the given arguments."""
@@ -271,28 +290,30 @@ class Bot(irc.IRCClient):
             self.userlist._handleChange(prefix, command, params, text)
         if command[0] == "005":
             self.sendLine('PROTOCTL NAMESX') 
-            
-        print line
-        print prefix, command, params, text
-        print "\n"
+            #print self.modules.values()
+        #"print line
+        #print prefix, command, params, text
+        #print "\n"
 
         self.handleLogging(prefix, command, params, text)
         
-        items = self.commands.items()
-        for regexp, funcs in items: 
-            for func in funcs:
-                if not func.event in command:
-                    continue
+        modules = self.modules.values()
+        for module in modules:
+            for regexp, funcs in module.items():
+                for func in funcs:
+                    if not func.event in command:
+                        continue
+    
+                    match = regexp.match(text)
+                    if match:
+                        input = CommandInput(self, prefix, command, params, text, match, line)
+                        bot = QuickReplyWrapper(self, input)
+                        targs = (func, bot, input)
+                        t = threading.Thread(target=self.runModule, args=targs)
+                        t.start()
 
-                match = regexp.match(text)
-                if match:
-                    input = CommandInput(self, prefix, command, params, text, match, line)
-                    bot = QuickReplyWrapper(self, input)
-                    targs = (func, bot, input)
-                    t = threading.Thread(target=self.call, args=targs)
-                    t.start()
 
-    def call(self, func, bot, input):
+    def runModule(self, func, bot, input):
         try:
             func(bot, input)
         except self.BadInputError, e:
@@ -302,11 +323,26 @@ class Bot(irc.IRCClient):
                 else:
                     self.msg(input.sender, 'Use %shelp %s for more info on how to use this command.'
                              % (self.config.get('prefix',''), func.__name__))
-        #except Exception, e:
-            #print "Error: %s" % str(e)
-            #if self.config.get('chandebug', True):
-            #    self.msg(input.sender, str(e))
-            #self.error(input)
+        except Exception, e:
+            if self.config.get('chandebug', True) and input.sender:
+                try:  
+                    import traceback
+                    trace = traceback.format_exc()
+                    print trace
+                    lines = list(reversed(trace.splitlines()))
+           
+                    report = [lines[0].strip()]
+                    for line in lines: 
+                        line = line.strip()
+                        if line.startswith('File "'): 
+                           report.append(line[0].lower() + line[1:])
+                           break
+                    else:
+                        report.append('source unknown')
+                    self.msg(input.sender, report[0] + ' (' + report[1] + ')')
+                except Exception, e:
+                    self.msg("Got an error: %s" % e)
+            
 
     def handleLogging(self, prefix, command, params, text):
         if not command[0].upper() in self.config['logevents']:
@@ -317,11 +353,13 @@ class Bot(irc.IRCClient):
             self.logger.log(sourcesplit(prefix)[0], params[0].lower(), "MODE", " ".join(params[1:]))
 
     def ctcpQuery_VERSION(self, user, channel, data):
-        nick = user.split("!",1)[0]
-        if self.versionName:
-            self.ctcpMakeReply(nick, [('VERSION', '%s' % self.versionName)])
+        if self.config.get('versionreply', None):
+            nick = user.split("!",1)[0]
+            self.ctcpMakeReply(nick, [('VERSION', '%s' % self.config['versionreply'])])
+
 
 class CommandInput(object):
+
     def __init__(self, bot, source, command, params, text, match, line):
         self.nick, self.user, self.host = sourcesplit(source or '')
         self.line = line
@@ -353,8 +391,10 @@ class CommandInput(object):
         if self.sender == self.nick:
             return True
         return False
+
             
 class QuickReplyWrapper(object): 
+
     def __init__(self, bot, input): 
         self.bot = bot
         self.input = input
@@ -375,6 +415,7 @@ class QuickReplyWrapper(object):
 
 
 class UserList(object):
+
     def __init__(self, bot):
         self.channels = {}
         self.bot = bot
@@ -395,7 +436,6 @@ class UserList(object):
                 self.channels[chan] = {}
                 self.bot.sendLine("WHO %s" % chan)
                 self.bot.sendLine("NAMES %s" % chan)
-
             self.channels[chan][nick.lower()] = {'nick': nick, 'user': user, 'host': host, 'mode': None}
 
         #RPL_WHOREPLY
@@ -404,10 +444,8 @@ class UserList(object):
             nick = params[5]
             user = params[2]
             host = params[3]
-        
             if not chan in self.channels:
                 self.channels[chan] = {}
-            
             self.channels[chan][nick.lower()] = {'nick': nick, 'user': user, 'host': host, 'mode': None}
             
         #RPL_NAMREPLY
@@ -461,7 +499,6 @@ class UserList(object):
                     if nick != newnick.lower():
                         del self.channels[chan][nick] 
 
-
     #Is <nick> on <chan>?
     def ison(self, nick, chan):
         nick = nick.lower()
@@ -491,14 +528,12 @@ class UserList(object):
             return self.channels[chan][nick]['mode']
         return None
     
-    
     #Is <nick> op'd on <chan>?
     def isop(self, nick, chan):
         if self.getmode(nick, chan):
             if '@' in self.getmode(nick, chan):
                 return True
         return False
-    
     
     #Is <nick> voiced on <chan>?
     def isvoice(self, nick, chan):
@@ -507,13 +542,11 @@ class UserList(object):
                 return True
         return False
     
-    
     #Is <nick> a regular user on <chan>?
     def isreg(self, nick, chan):
         if self.getmode(nick, chan) == None:
             return True
         return False
-    
     
     #Return a list of channels <nick> is on
     def chans(self, nick):
@@ -523,6 +556,7 @@ class UserList(object):
 
 
 class IRCLogger(object):
+
     def __init__(self, bot, logtype, logdir = None):
         self.bot = bot
         self.logdir = logdir or "logs"
@@ -533,8 +567,7 @@ class IRCLogger(object):
             self.log = self.plaintextlog
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-        
-    
+
     def plaintextlog(self, sender, channel, event, text):
         logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + channel + ".log")
         timestamp = time.strftime("[%H:%M:%S]")
@@ -565,12 +598,12 @@ class IRCLogger(object):
             logs[channel].write("%s * %s sets mode: %s\r\n" % (timestamp, sender, text))
 
         logs[channel].flush()
-
         self.bot.logs = logs
-            
+
 
 class BotFactory(protocol.ClientFactory):
-     # the class of the protocol to build when new connection is made
+
+    # the class of the protocol to build when new connection is made
     protocol = Bot
 
     def __init__(self, config, connections):

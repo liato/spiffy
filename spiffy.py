@@ -1,8 +1,15 @@
-import sys, os, imp, random
-from bot import BotFactory
+#!/usr/bin/env python
+import sys
+import os
+import imp
+import random
+
 from twisted.internet import reactor
+from bot import BotFactory
 
 connections = {}
+
+
 if __name__ == '__main__':
     if sys.version_info < (2, 4): 
         print >> sys.stderr, 'Error: Requires Python 2.4 or later, from www.python.org'
@@ -18,7 +25,7 @@ if __name__ == '__main__':
     if hasattr(config, 'networks'):
         for network in config.networks:
             serverconfig = {}
-            config_defaults = {'prefix': r'\.', 'nick': 'spiffy', 'chandebug': True, 'channels': [], 'logevents': ['PRIVMSG', 'JOIN', 'PART', 'MODE', 'TOPIC', 'KICK', 'QUIT', 'NOTICE']}
+            config_defaults = {'prefix': r'!', 'nick': 'spiffy', 'chandebug': True, 'channels': [], 'logevents': ['PRIVMSG', 'JOIN', 'PART', 'MODE', 'TOPIC', 'KICK', 'QUIT', 'NOTICE', 'NICK']}
             for x in config_defaults:
                 serverconfig[x] = config_defaults[x]
             for x in config.__dict__:
