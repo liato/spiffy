@@ -29,6 +29,6 @@ def reload(self, input):
     self.reply('%r (version: %s)' % (module, modified))
 
 reload.rule = ('$nick', ['reload'], r'(\S+)?')
-ep.usage = [("Reload a module from the modules directory", "$nick $cmd <module>"),
+reload.usage = [("Reload a module from the modules directory", "$nick $cmd <module>"),
     ("Reload all modules from the modules directory", "$nick $cmd *")]
-ep.example = [("Reload the imdb module","$nick $cmd imdb")]
+reload.example = [("Reload the imdb module","$nick $cmd imdb")]

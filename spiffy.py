@@ -2,7 +2,6 @@
 import sys
 import os
 import imp
-import random
 
 from twisted.internet import reactor
 from bot import BotFactory
@@ -25,7 +24,12 @@ if __name__ == '__main__':
     if hasattr(config, 'networks'):
         for network in config.networks:
             serverconfig = {}
-            config_defaults = {'prefix': r'!', 'nick': 'spiffy', 'chandebug': True, 'channels': [], 'logevents': ['PRIVMSG', 'JOIN', 'PART', 'MODE', 'TOPIC', 'KICK', 'QUIT', 'NOTICE', 'NICK']}
+            config_defaults = {'nick': 'spiffy', 'prefix': r'!',
+                               'chandebug': True, 'channels': [],
+                                'logevents': ['PRIVMSG', 'JOIN', 'PART',
+                                              'MODE', 'TOPIC', 'KICK', 'QUIT',
+                                              'NOTICE', 'NICK'],
+                                'verbose': True}
             for x in config_defaults:
                 serverconfig[x] = config_defaults[x]
             for x in config.__dict__:
@@ -43,13 +47,16 @@ if __name__ == '__main__':
                 server = serverconfig['host']
                 port = 6667
                 if isinstance(server, (tuple, list)):
-                    server = server[random.randrange(len(server))]
+                    server = server[0]
+                    serverconfig['activeservernum'] = 0
+                else:
+                    serverconfig['activeservernum'] = -1
                 
                 if ':' in server:
                     server, port = server.split(':')
                     port = int(port)
 
-                serverconfig['activeserver'] = '%s:%s' % (server, port or 6667)
+                serverconfig['activeserver'] = (server, port or 6667)
                 reactor.connectTCP(server, port or 6667, BotFactory(serverconfig, connections))
         reactor.run()
 

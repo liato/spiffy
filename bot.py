@@ -6,6 +6,8 @@ import re
 import threading
 import codecs
 import datetime
+import traceback
+
 
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric, split
@@ -55,14 +57,15 @@ class Bot(irc.IRCClient):
         self.verbose = True
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible for modules
+        self.config['reconnect'] = True
         
         self.loadModules()
         irc.IRCClient.connectionMade(self)
-        print "Connected at %s" % time.asctime(time.localtime(time.time()))
+        self._print("Connected to %s:%s at %s" % (self.transport.connector.host, self.transport.connector.port, time.asctime(time.localtime(time.time()))))
 
         
     def loadModules(self):
-        print "Loading modules..."
+        self._print("Loading modules...")
         self.modules = {} #Modules loaded from the modules directory.
         self.doc = {} #Documentation for modules.
         self.aliases = {} #Aliases for modules.
@@ -77,19 +80,25 @@ class Bot(irc.IRCClient):
                 try:
                     self.loadModule(filename)
                 except Exception, e: 
-                    print >> sys.stderr, "Error loading %s: %s (in bot.py)" % (name, e)
+                    self._print("Error loading %s: %s (in bot.py)" % (name, e), 'err')
                 else:
                     modules.append(name)
         if modules: 
-           print 'Registered modules:', ', '.join(modules)
+           self._print('Registered modules:', ', '.join(modules))
         else:
-            print >> sys.stderr, "Warning: Couldn't find any modules. Does /modules exist?"
+            self._print("Warning: Couldn't find any modules. Does /modules exist?", 'err')
 
     def loadModule(self, filename):
 
-        def bind(self, regexp, func, commands = None): 
-            # register documentation
+        def bind(self, regexp, func): 
+            if func.name in self.modules:
+                self.modules[func.name].append((regexp, func))
+            else:
+                self.modules[func.name] = [(regexp, func)]
+
+        def createdoc(self, func, commands = None):
             pcmd = self.config["prefix"] + func.name # pcmd = prefixed command
+            commands = commands[:]
 
             if func.__doc__:
                 doc = func.__doc__
@@ -128,12 +137,7 @@ class Bot(irc.IRCClient):
             else:
                 aliases = None
             
-            self.doc[func.name] = (doc, usage, example, aliases)
-            #self.modules.setdefault(regexp, []).append(func)
-            if func.name in self.modules:
-                self.modules[func.name].setdefault(regexp, []).append(func)
-            else:
-                self.modules[func.name] = {regexp: [func]}
+            self.doc[func.name] = (doc, usage, example, aliases)            
   
         def sub(pattern, self=self): 
             # These replacements have significant order
@@ -163,6 +167,7 @@ class Bot(irc.IRCClient):
                         pattern = sub(func.rule)
                         regexp = re.compile(pattern)
                         bind(self, regexp, func)
+                        createdoc(self, func)
         
                     elif isinstance(func.rule, tuple): 
                         # 1) e.g. ('$nick', '(.*)')
@@ -171,38 +176,68 @@ class Bot(irc.IRCClient):
                             prefix = sub(prefix)
                             regexp = re.compile(prefix + pattern, re.IGNORECASE)
                             bind(self, regexp, func)
+                            createdoc(self, func)
          
                         # 2) e.g. (['p', 'q'], '(.*)')
                         elif len(func.rule) == 2 and isinstance(func.rule[0], list): 
                             prefix = self.config['prefix']
                             commands, pattern = func.rule
+                            createdoc(self, func, commands)
                             for command in commands:
                                 command = r'(%s)(?: +(?:%s))?$' % (command, pattern)
                                 regexp = re.compile(prefix + command, re.IGNORECASE)
-                                bind(self, regexp, func, commands)
+                                bind(self, regexp, func)
          
                         # 3) e.g. ('$nick', ['p', 'q'], '(.*)')
                         elif len(func.rule) == 3: 
                             prefix, commands, pattern = func.rule
                             prefix = sub(prefix)
+                            createdoc(self, func, commands)
                             for command in commands: 
                                 command = r'(%s) +' % command
                                 regexp = re.compile(prefix + command + pattern, re.IGNORECASE)
-                                bind(self, regexp, func, commands)
+                                bind(self, regexp, func)
        
-                if hasattr(func, 'commands'): 
+                if hasattr(func, 'commands'):
+                    createdoc(self, func, func.commands)
                     for command in func.commands: 
                         template = r'^%s(%s)(?: +(.*))?$'
                         pattern = template % (self.config['prefix'], command)
                         regexp = re.compile(pattern, re.IGNORECASE)
-                        bind(self, regexp, func, func.commands)
+                        bind(self, regexp, func)
         
         return module
         
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
-        print "Disconnected at %s" % time.asctime(time.localtime(time.time()))
+        self._print("Disconnected at %s" % time.asctime(time.localtime(time.time())))
 
+    def disconnect(self, reason = 'leaving'):
+        self.config['reconnect'] = False
+        self.sendLine('QUIT :%s' % reason)
+        
+    def connect(self):
+        self.config['reconnect'] = True
+        self.transport.connector.connect()
+
+    def jump(self):
+        self.sendLine('QUIT :Changing servers')
+        
+    def _print(self, text, output = 'out'):
+        if self.verbose:
+            timestamp = time.strftime("%H:%M:%S")
+            if len(self.config['networks']) > 1:
+                prefix = "[%s][%s] " % (self.config['network'], timestamp)
+            else:
+                prefix = "[%s] " % timestamp
+            if output == 'err':
+                output = sys.stderr
+            else:
+                output = sys.stdout
+            
+            print >> output, prefix+text
+        
+        
     def modeChanged(self, user, channel, set, modes, args):
         """Called when users or channel's modes are changed."""
         
@@ -240,7 +275,7 @@ class Bot(irc.IRCClient):
 
     def joined(self, channel):
         """This will get called when the bot joins the channel."""
-        print "[I have joined %s]" % channel
+        self._print("Joined %s" % channel)
 
     def msg(self,receiver,msg):
         lines = msg.split("\n")
@@ -272,7 +307,9 @@ class Bot(irc.IRCClient):
                 command = numeric_to_symbolic[command]
             self.handleCommand(command, prefix, params, text, line)
         except Exception, e:
-            print "Error: %s" % e
+            self._print("Error: %s" % e, 'err')
+            print traceback.format_exc()
+
 
     def handleCommand(self, command, prefix, params, text, line):
         """Determine the function to call for the given command and call
@@ -295,22 +332,21 @@ class Bot(irc.IRCClient):
         #print prefix, command, params, text
         #print "\n"
 
-        self.handleLogging(prefix, command, params, text)
+        self.logger.log(prefix, command, params, text)
         
         modules = self.modules.values()
         for module in modules:
-            for regexp, funcs in module.items():
-                for func in funcs:
-                    if not func.event in command:
-                        continue
-    
-                    match = regexp.match(text)
-                    if match:
-                        input = CommandInput(self, prefix, command, params, text, match, line)
-                        bot = QuickReplyWrapper(self, input)
-                        targs = (func, bot, input)
-                        t = threading.Thread(target=self.runModule, args=targs)
-                        t.start()
+            for regexp, func in module:
+                if not func.event in command:
+                    continue
+
+                match = regexp.match(text)
+                if match:
+                    input = CommandInput(self, prefix, command, params, text, match, line)
+                    bot = QuickReplyWrapper(self, input)
+                    targs = (func, bot, input)
+                    t = threading.Thread(target=self.runModule, args=targs)
+                    t.start()
 
 
     def runModule(self, func, bot, input):
@@ -342,15 +378,6 @@ class Bot(irc.IRCClient):
                     self.msg(input.sender, report[0] + ' (' + report[1] + ')')
                 except Exception, e:
                     self.msg("Got an error: %s" % e)
-            
-
-    def handleLogging(self, prefix, command, params, text):
-        if not command[0].upper() in self.config['logevents']:
-            return
-        if command[0].upper() == "PRIVMSG":
-            self.logger.log(sourcesplit(prefix)[0], params[0].lower(), "PRIVMSG", text)
-        elif command[0].upper() == "MODE":
-            self.logger.log(sourcesplit(prefix)[0], params[0].lower(), "MODE", " ".join(params[1:]))
 
     def ctcpQuery_VERSION(self, user, channel, data):
         if self.config.get('versionreply', None):
@@ -461,7 +488,7 @@ class UserList(object):
 
         #KICK
         elif command.lower() == "kick":
-            chan = input.rawline.split(' ')[2].lower()
+            chan = params[0].lower()
             nick = params[1].lower()
             if chan in self.channels:
                 if nick == self.bot.nickname.lower():
@@ -564,13 +591,39 @@ class IRCLogger(object):
         if logtype == "whatever, sqlite3/mysql in the future":
             pass
         elif logtype == "plaintext":
-            self.log = self.plaintextlog
+            self._log = self.plaintextlog
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
+
+
+    def log(self, prefix, command, params, text):
+        command = command[0].upper()
+        if not command in self.bot.config['logevents']:
+            return
+        nick, user, host = sourcesplit(prefix)
+        if command == "PRIVMSG":
+            self._log(nick, params[0].lower(), command, text)
+        elif command == "PART":
+            self._log(nick, params[0].lower(), command, "(%s@%s) has left %s%s" % (user, host, params[0].lower(), text and ' ('+text+')' or ''))
+        elif command == "JOIN":
+            self._log(nick, text or params[0].lower(), command, "(%s@%s) has joined %s" % (user, host, text or params[0].lower()))
+        elif command == "KICK":
+            self._log(params[1].lower(), params[0].lower(), command, "%s (%s)" % (nick, text))
+        elif command == "TOPIC":
+            self._log(nick, params[0].lower(), command, text)
+        elif command == "MODE":
+            self._log(nick, params[0].lower(), command, " ".join(params[1:]))
+        elif command == "NICK":
+            for chan in self.bot.userlist.channels:
+                self._log(nick, chan, command, params[0])
+        elif command == "QUIT":
+            for chan in self.bot.userlist.channels:
+                self._log(nick, chan, command, "(%s@%s) Quit (%s)" % (user, host, text))
 
     def plaintextlog(self, sender, channel, event, text):
         logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + channel + ".log")
         timestamp = time.strftime("[%H:%M:%S]")
+        event = event.upper()
 
         logs = getattr(self.bot, "logs", {})  
         if channel not in logs:
@@ -592,10 +645,23 @@ class IRCLogger(object):
         if datetime.date.today() > self.lastmsg[channel]:
             self.lastmsg[channel] = datetime.date.today()
             logs[channel].write("# Start of new day, %s.\r\n" % self.lastmsg[channel].isoformat())
-        if event.upper() == "PRIVMSG":
+        if event == "PRIVMSG":
             logs[channel].write("%s <%s> %s\r\n" % (timestamp, sender, text))
-        elif event.upper() == "MODE":
+        elif event == "JOIN":
+            logs[channel].write("%s * %s %s\r\n" % (timestamp, sender, text))
+        elif event == "PART":
+            logs[channel].write("%s * %s %s\r\n" % (timestamp, sender, text))
+        elif event == "MODE":
             logs[channel].write("%s * %s sets mode: %s\r\n" % (timestamp, sender, text))
+        elif event == "NICK":
+            logs[channel].write("%s * %s is known as %s\r\n" % (timestamp, sender, text))
+        elif event == "KICK":
+            logs[channel].write("%s * %s was kicked by %s\r\n" % (timestamp, sender, text))
+        elif event == "TOPIC":
+            logs[channel].write("%s * %s changes topic to '%s'\r\n" % (timestamp, sender, text))
+        elif event == "QUIT":
+            logs[channel].write("%s * %s %s\r\n" % (timestamp, sender, text))
+            
 
         logs[channel].flush()
         self.bot.logs = logs
@@ -612,8 +678,23 @@ class BotFactory(protocol.ClientFactory):
 
     def clientConnectionLost(self, connector, reason):
         """If we get disconnected, reconnect to server."""
-        connector.connect()
+        if self.config.get('reconnect'):
+            activeservernum = self.config.get('activeservernum', -1)
+            if activeservernum >= 0:
+                activeservernum += 1
+                if activeservernum > (len(self.config['host'])-1):
+                    activeservernum = 0
+                server = self.config['host'][activeservernum]
+                port = 6667
+                if ':' in server:
+                    server, port = server.split(':')
+                    port = int(port)
+                self.config['activeserver'] = (server, port)
+                self.config['activeservernum'] = activeservernum
+                connector.host = server
+                connector.port = port
+            connector.connect()
 
     def clientConnectionFailed(self, connector, reason):
-        print "connection failed:", reason
+        self._print("connection failed: %" % reason, 'err')
         reactor.stop()
