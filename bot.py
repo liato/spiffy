@@ -7,6 +7,7 @@ import threading
 import codecs
 import datetime
 import traceback
+import sqlite3
 
 
 from twisted.words.protocols import irc
@@ -45,16 +46,16 @@ class Bot(irc.IRCClient):
             return repr(self)
 
     def connectionMade(self):
+        self.verbose = True
         self.config = self.factory.config
         self.connections = self.factory.connections
         self.connections[self.config['network']] = self
         self.nickname = self.config.get('nick', 'spiffy')
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
-        self.logger = IRCLogger(self, "plaintext")
+        self.logger = IRCLogger(self, "logs")
         self.userlist = UserList(self)
         self.config['logevents'] = [s.upper() for s in self.config['logevents']]
-        self.verbose = True
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible for modules
         self.config['reconnect'] = True
@@ -584,86 +585,132 @@ class UserList(object):
 
 class IRCLogger(object):
 
-    def __init__(self, bot, logtype, logdir = None):
+    def __init__(self, bot, logtype):
         self.bot = bot
-        self.logdir = logdir or "logs"
-        self.lastmsg = {}        
-        if logtype == "whatever, sqlite3/mysql in the future":
+        self.logdir = "logs"
+        self.lastmsg = {}
+
+                
+        if logtype.lower().startswith("mysql"):
             pass
-        elif logtype == "plaintext":
+        
+        elif logtype.lower().startswith("sqlite") or ("." in logtype and logtype.lower().rsplit(".",1)[1] in ["s3db", "db", "sqlite", "sqlite3"]):
+            # logtype is either "sqlite://path/to/db.ext", "logs/db.ext", "/path/to/db.ext" or "C:\path\to\db.ext"
+            self.logdir = os.path.abspath(re.sub("sqlite3?://","",logtype))
+                        
+            if not os.path.basename(self.logdir):
+                self.logdir = os.path.join(self.logdir,"logs.s3db")
+                        
+            self._log = self.sqlitelog
+                        
+        else:
             self._log = self.plaintextlog
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-
 
     def log(self, prefix, command, params, text):
         command = command[0].upper()
         if not command in self.bot.config['logevents']:
             return
+
+        self._log(prefix, command, params, text)
+                                
+                                
+    def parsetotext(self, prefix, command, params, text, timestamp = None):
+        if not timestamp:
+            timestamp = time.strftime("[%H:%M:%S]")
+                        
         nick, user, host = sourcesplit(prefix)
+                
+        args = (timestamp, nick, text)
         if command == "PRIVMSG":
-            self._log(nick, params[0].lower(), command, text)
+            return [(params[0].lower(), nick, "%s <%s> %s\r\n" % args)]
         elif command == "PART":
-            self._log(nick, params[0].lower(), command, "(%s@%s) has left %s%s" % (user, host, params[0].lower(), text and ' ('+text+')' or ''))
+            return [(params[0].lower(), nick, "%s * %s %s\r\n" % (timestamp,nick, "(%s@%s) has left %s%s" % (user, host, params[0].lower(), text and ' ('+text+')' or '')))]
         elif command == "JOIN":
-            self._log(nick, text or params[0].lower(), command, "(%s@%s) has joined %s" % (user, host, text or params[0].lower()))
+            return [(text or params[0].lower(), nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) has joined %s" % (user, host, text or params[0].lower())))]
         elif command == "KICK":
-            self._log(params[1].lower(), params[0].lower(), command, "%s (%s)" % (nick, text))
+            return [(params[0].lower(), nick, "%s * %s was kicked by %s\r\n" % (timestamp, params[1].lower(), "%s (%s)" % (nick, text)))]
         elif command == "TOPIC":
-            self._log(nick, params[0].lower(), command, text)
+            return [(params[0].lower(), nick, "%s * %s changes topic to '%s'\r\n" % args)]
         elif command == "MODE":
-            self._log(nick, params[0].lower(), command, " ".join(params[1:]))
+            return [(params[0].lower(), nick, "%s * %s sets mode: %s\r\n" % (timestamp, nick, " ".join(params[1:])))]
         elif command == "NICK":
-            for chan in self.bot.userlist.channels:
-                self._log(nick, chan, command, params[0])
+            return [(chan, nick, "%s * %s is known as %s\r\n" % (timestamp, nick, params[0])) for chan in self.bot.userlist.channels]
         elif command == "QUIT":
-            for chan in self.bot.userlist.channels:
-                self._log(nick, chan, command, "(%s@%s) Quit (%s)" % (user, host, text))
+            return [(chan, nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) Quit (%s)" % (user, host, text))) for chan in self.bot.userlist.channels]
 
-    def plaintextlog(self, sender, channel, event, text):
-        logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + channel + ".log")
+        
+    def sqlitelog(self, prefix, command, params, text):
+        if command in ["PRIVMSG","PART","KICK","TOPIC","MODE"]:
+            channel = params[0].lower()
+        elif command in ["NICK","QUIT"]:
+            channel = "#debug" # fixme
+        elif command in ["JOIN"]:
+            channel = text or params[0].lower()
+        else:
+            channel = "#debug" # fixme
+
+        if channel.startswith("#"):
+            tablename = self.bot.config["network"] + channel.replace("#","__chan__")
+        else:
+            tablename = self.bot.config["network"] + "__pm__" + channel
+
+        ##### DO NOT REMOVE, commented out to prevent accidental executions
+        
+##        conn = sqlite3.connect("logs/log.s3db", detect_types = sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+##        conn.row_factory = sqlite3.Row
+##        c = conn.cursor()
+##
+##        # check if a table exists for the current channel
+##        c.execute("select tbl_name from sqlite_master where tbl_name = ?",(chan,))
+##        if not c.fetchone():
+##            c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, command TEXT, params TEXT, text TEXT)" % tablename)
+##            print "Created table %s in sqlite database" % tablename
+##        
+##
+##
+##        c.close()
+##        conn.commit()
+##        conn.close()
+                        
+    def plaintextlog(self, prefix, command, params, text):
         timestamp = time.strftime("[%H:%M:%S]")
-        event = event.upper()
+        logs = getattr(self.bot, "logs", {})
+        
+        logstrings = self.parsetotext(prefix, command, params, text, timestamp)
+        if not logstrings:
+            return
+        
+        for channel, sender, logstring in logstrings:
+            if channel.startswith("#"):
+                logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + channel + ".log")
+            else:
+                logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + sender + ".log")
 
-        logs = getattr(self.bot, "logs", {})  
-        if channel not in logs:
-            # nothing has been logged from this chan yet, must open file
-            self.lastmsg[channel] = datetime.date.today()
-            f = codecs.open(logpath,"a","utf-8")
-            f.write("\r\nSession Start: %s\r\n" % time.strftime("%a %b %d %H:%M:%S %Y"))
-            f.write("Session Ident: %s\r\n" % channel)
-            f.write("%s * Now talking in %s\r\n" % (timestamp, channel))
-            
-            # not sure how to get this info, but it's necessary if we strive for
-            # compatibility with the mIRC log format (to allow the use of third
-            # party log analyzers for stats and the like)
-            f.write("%s * Topic is 'XXXXXXXXXXXX'\r\n" % timestamp)
-            f.write("%s * Set by XXXXXXX on XXXXXXX\r\n" % timestamp)
-            
-            logs[channel] = f
+            if channel not in logs:
+                # nothing has been logged from this chan yet, must open file
+                self.lastmsg[channel] = datetime.date.today()
+                f = codecs.open(logpath,"a","utf-8")
+                f.write("\r\nSession Start: %s\r\n" % time.strftime("%a %b %d %H:%M:%S %Y"))
+                f.write("Session Ident: %s\r\n" % channel)
+                f.write("%s * Now talking in %s\r\n" % (timestamp, channel))
+                
+                # not sure how to get this info, but it's necessary if we strive for
+                # compatibility with the mIRC log format (to allow the use of third
+                # party log analyzers for stats and the like)
+                f.write("%s * Topic is 'XXXXXXXXXXXX'\r\n" % timestamp)
+                f.write("%s * Set by XXXXXXX on XXXXXXX\r\n" % timestamp)
+                
+                logs[channel] = f
 
-        if datetime.date.today() > self.lastmsg[channel]:
-            self.lastmsg[channel] = datetime.date.today()
-            logs[channel].write("# Start of new day, %s.\r\n" % self.lastmsg[channel].isoformat())
-        if event == "PRIVMSG":
-            logs[channel].write("%s <%s> %s\r\n" % (timestamp, sender, text))
-        elif event == "JOIN":
-            logs[channel].write("%s * %s %s\r\n" % (timestamp, sender, text))
-        elif event == "PART":
-            logs[channel].write("%s * %s %s\r\n" % (timestamp, sender, text))
-        elif event == "MODE":
-            logs[channel].write("%s * %s sets mode: %s\r\n" % (timestamp, sender, text))
-        elif event == "NICK":
-            logs[channel].write("%s * %s is known as %s\r\n" % (timestamp, sender, text))
-        elif event == "KICK":
-            logs[channel].write("%s * %s was kicked by %s\r\n" % (timestamp, sender, text))
-        elif event == "TOPIC":
-            logs[channel].write("%s * %s changes topic to '%s'\r\n" % (timestamp, sender, text))
-        elif event == "QUIT":
-            logs[channel].write("%s * %s %s\r\n" % (timestamp, sender, text))
-            
-
-        logs[channel].flush()
+            if datetime.date.today() > self.lastmsg[channel]:
+                self.lastmsg[channel] = datetime.date.today()
+                logs[channel].write("# Start of new day, %s.\r\n" % self.lastmsg[channel].isoformat())
+                            
+            logs[channel].write(logstring)
+            logs[channel].flush()
+                        
         self.bot.logs = logs
 
 
