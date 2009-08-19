@@ -29,7 +29,7 @@ if __name__ == '__main__':
                                 'logevents': ['PRIVMSG', 'JOIN', 'PART',
                                               'MODE', 'TOPIC', 'KICK', 'QUIT',
                                               'NOTICE', 'NICK'],
-                                'verbose': True}
+                                'verbose': True, 'reconnect': 10}
             for x in config_defaults:
                 serverconfig[x] = config_defaults[x]
             for x in config.__dict__:

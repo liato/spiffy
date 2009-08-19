@@ -46,19 +46,18 @@ class Bot(irc.IRCClient):
             return repr(self)
 
     def connectionMade(self):
-        self.verbose = True
         self.config = self.factory.config
         self.connections = self.factory.connections
         self.connections[self.config['network']] = self
         self.nickname = self.config.get('nick', 'spiffy')
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
+        self.config['logevents'] = [s.upper() for s in self.config['logevents']]
         self.logger = IRCLogger(self, "logs")
         self.userlist = UserList(self)
-        self.config['logevents'] = [s.upper() for s in self.config['logevents']]
         self.encoding = 'utf-8'
-        self.split = split #Make the split function accessible for modules
-        self.config['reconnect'] = True
+        self.split = split #Make the split function accessible to modules
+        self._print = self.factory._print
         
         self.loadModules()
         irc.IRCClient.connectionMade(self)
@@ -218,26 +217,11 @@ class Bot(irc.IRCClient):
         self.sendLine('QUIT :%s' % reason)
         
     def connect(self):
-        self.config['reconnect'] = True
+        self.config['reconnect'] = 10
         self.transport.connector.connect()
 
     def jump(self):
         self.sendLine('QUIT :Changing servers')
-        
-    def _print(self, text, output = 'out'):
-        if self.verbose:
-            timestamp = time.strftime("%H:%M:%S")
-            if len(self.config['networks']) > 1:
-                prefix = "[%s][%s] " % (self.config['network'], timestamp)
-            else:
-                prefix = "[%s] " % timestamp
-            if output == 'err':
-                output = sys.stderr
-            else:
-                output = sys.stdout
-            
-            print >> output, prefix+text
-        
         
     def modeChanged(self, user, channel, set, modes, args):
         """Called when users or channel's modes are changed."""
@@ -636,7 +620,7 @@ class IRCLogger(object):
         elif command == "MODE":
             return [(params[0].lower(), nick, "%s * %s sets mode: %s\r\n" % (timestamp, nick, " ".join(params[1:])))]
         elif command == "NICK":
-            return [(chan, nick, "%s * %s is known as %s\r\n" % (timestamp, nick, params[0])) for chan in self.bot.userlist.channels]
+            return [(chan, nick, "%s * %s is known as %s\r\n" % (timestamp, nick, params[0]))  for chan in self.bot.userlist.channels]
         elif command == "QUIT":
             return [(chan, nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) Quit (%s)" % (user, host, text))) for chan in self.bot.userlist.channels]
 
@@ -723,9 +707,24 @@ class BotFactory(protocol.ClientFactory):
         self.config = config
         self.connections = connections
 
+    def _print(self, text, output = 'out'):
+        if self.config.get('verbose', True):
+            timestamp = time.strftime("%H:%M:%S")
+            if len(self.config['networks']) > 1:
+                prefix = "[%s][%s] " % (self.config['network'], timestamp)
+            else:
+                prefix = "[%s] " % timestamp
+            if output == 'err':
+                output = sys.stderr
+            else:
+                output = sys.stdout
+            
+            print >> output, prefix+text
+
     def clientConnectionLost(self, connector, reason):
         """If we get disconnected, reconnect to server."""
-        if self.config.get('reconnect'):
+        self._print('Disconnected from %s.' % self.config.get('network'))
+        if not self.config.get('reconnect') == False:
             activeservernum = self.config.get('activeservernum', -1)
             if activeservernum >= 0:
                 activeservernum += 1
@@ -740,8 +739,16 @@ class BotFactory(protocol.ClientFactory):
                 self.config['activeservernum'] = activeservernum
                 connector.host = server
                 connector.port = port
+
+            try:
+                rtime = int(self.config.get('reconnect'))
+            except (ValueError, TypeError), e:
+                rtime = 10
+            self._print('Reconnecting in %s seconds...' % rtime)
+            time.sleep(rtime)
+            
             connector.connect()
 
     def clientConnectionFailed(self, connector, reason):
-        self._print("connection failed: %" % reason, 'err')
+        self._print("Connection failed: %s" % reason, 'err')
         reactor.stop()
