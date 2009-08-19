@@ -8,6 +8,7 @@ import codecs
 import datetime
 import traceback
 import sqlite3
+import simplejson as json
 
 
 from twisted.words.protocols import irc
@@ -53,7 +54,8 @@ class Bot(irc.IRCClient):
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
         self.config['logevents'] = [s.upper() for s in self.config['logevents']]
-        self.logger = IRCLogger(self, "logs")
+##        self.logger = IRCLogger(self, "logs/logs.s3db") # to try sqlite, uncomment this and uncomment below
+        self.logger = IRCLogger(self,"logs")
         self.userlist = UserList(self)
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible to modules
@@ -299,6 +301,8 @@ class Bot(irc.IRCClient):
     def handleCommand(self, command, prefix, params, text, line):
         """Determine the function to call for the given command and call
         it with the given arguments."""
+
+        
         
         method = getattr(self, "irc_%s" % command, None)
         if method is not None:
@@ -308,6 +312,9 @@ class Bot(irc.IRCClient):
                 pass
 
         command = (symbolic_to_numeric.get(command, command), command)
+
+        self.logger.log(prefix, command, params, text)
+        
         if command[0].upper() in ("JOIN", "352", "353", "KICK", "PART", "QUIT", "NICK"):
             self.userlist._handleChange(prefix, command, params, text)
         if command[0] == "005":
@@ -316,8 +323,6 @@ class Bot(irc.IRCClient):
         #"print line
         #print prefix, command, params, text
         #print "\n"
-
-        self.logger.log(prefix, command, params, text)
         
         modules = self.modules.values()
         for module in modules:
@@ -584,10 +589,14 @@ class IRCLogger(object):
                         
             if not os.path.basename(self.logdir):
                 self.logdir = os.path.join(self.logdir,"logs.s3db")
+
+            print "Logging to SQLite database at", self.logdir
                         
             self._log = self.sqlitelog
                         
         else:
+            # TODO: add proper handling of the logtype parameter in this case.
+            # right now, it simply uses "/logs/" in the current working dir
             self._log = self.plaintextlog
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
@@ -608,55 +617,67 @@ class IRCLogger(object):
                 
         args = (timestamp, nick, text)
         if command == "PRIVMSG":
-            return [(params[0].lower(), nick, "%s <%s> %s\r\n" % args)]
+            return (params[0].lower(), nick, "%s <%s> %s\r\n" % args)
         elif command == "PART":
-            return [(params[0].lower(), nick, "%s * %s %s\r\n" % (timestamp,nick, "(%s@%s) has left %s%s" % (user, host, params[0].lower(), text and ' ('+text+')' or '')))]
+            return (params[0].lower(), nick, "%s * %s %s\r\n" % (timestamp,nick, "(%s@%s) has left %s%s" % (user, host, params[0].lower(), text and ' ('+text+')' or '')))
         elif command == "JOIN":
-            return [(text or params[0].lower(), nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) has joined %s" % (user, host, text or params[0].lower())))]
+            return (text or params[0].lower(), nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) has joined %s" % (user, host, text or params[0].lower())))
         elif command == "KICK":
-            return [(params[0].lower(), nick, "%s * %s was kicked by %s\r\n" % (timestamp, params[1].lower(), "%s (%s)" % (nick, text)))]
+            return (params[0].lower(), nick, "%s * %s was kicked by %s\r\n" % (timestamp, params[1].lower(), "%s (%s)" % (nick, text)))
         elif command == "TOPIC":
-            return [(params[0].lower(), nick, "%s * %s changes topic to '%s'\r\n" % args)]
+            return (params[0].lower(), nick, "%s * %s changes topic to '%s'\r\n" % args)
         elif command == "MODE":
-            return [(params[0].lower(), nick, "%s * %s sets mode: %s\r\n" % (timestamp, nick, " ".join(params[1:])))]
+            return (params[0].lower(), nick, "%s * %s sets mode: %s\r\n" % (timestamp, nick, " ".join(params[1:])))
         elif command == "NICK":
-            return [(chan, nick, "%s * %s is known as %s\r\n" % (timestamp, nick, params[0]))  for chan in self.bot.userlist.channels]
+            return (None, nick, "%s * %s is now known as %s\r\n" % (timestamp, nick, params[0]))
         elif command == "QUIT":
-            return [(chan, nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) Quit (%s)" % (user, host, text))) for chan in self.bot.userlist.channels]
+            return (None, nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) Quit (%s)" % (user, host, text)))
 
         
-    def sqlitelog(self, prefix, command, params, text):
+    def sqlitelog(self, prefix, command, params, text):  
+        nick, user, host = sourcesplit(prefix)
+        timestamp = datetime.datetime.now()
+        
         if command in ["PRIVMSG","PART","KICK","TOPIC","MODE"]:
-            channel = params[0].lower()
+            channels = [params[0].lower()]
         elif command in ["NICK","QUIT"]:
-            channel = "#debug" # fixme
+            channels = self.bot.userlist.chans(nick)
         elif command in ["JOIN"]:
-            channel = text or params[0].lower()
+            channels = [text or params[0].lower()]
         else:
-            channel = "#debug" # fixme
+            channels = ["#debug"] # fixme
 
-        if channel.startswith("#"):
-            tablename = self.bot.config["network"] + channel.replace("#","__chan__")
-        else:
-            tablename = self.bot.config["network"] + "__pm__" + channel
 
-        ##### DO NOT REMOVE, commented out to prevent accidental executions
-        
-##        conn = sqlite3.connect("logs/log.s3db", detect_types = sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
-##        conn.row_factory = sqlite3.Row
-##        c = conn.cursor()
-##
-##        # check if a table exists for the current channel
-##        c.execute("select tbl_name from sqlite_master where tbl_name = ?",(chan,))
-##        if not c.fetchone():
-##            c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, command TEXT, params TEXT, text TEXT)" % tablename)
-##            print "Created table %s in sqlite database" % tablename
-##        
-##
-##
-##        c.close()
-##        conn.commit()
-##        conn.close()
+        conn = sqlite3.connect(self.logdir, detect_types = sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+
+        for channel in channels:
+
+            # temporary countermeasure to avoid exceptions if channel contains
+            # forbidden characters. to be removed later, ofc
+            if any(c in channel for c in "-!.><|"):
+                continue
+            
+            if channel.startswith("#"):
+                tablename = self.bot.config["network"] + channel.replace("#","__chan__")
+            else:
+                tablename = self.bot.config["network"] + "__pm__" + nick
+
+            # check if a table exists for the current channel
+            c.execute("select tbl_name from sqlite_master where tbl_name = ?", (tablename,))
+            if not c.fetchone():
+                c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, command TEXT, params TEXT, text TEXT)" % tablename)
+                print "Created table %s in sqlite database" % tablename
+
+            # table has been created if it didn't already exist, so we can do our insertions
+            query = "INSERT INTO %s (ts, prefix, command, params, text) VALUES (?,?,?,?,?)"
+            c.execute(query % tablename, (timestamp, prefix, command, json.dumps(params), text))
+
+
+        c.close()
+        conn.commit()
+        conn.close()
                         
     def plaintextlog(self, prefix, command, params, text):
         timestamp = time.strftime("[%H:%M:%S]")
@@ -666,7 +687,14 @@ class IRCLogger(object):
         if not logstrings:
             return
         
-        for channel, sender, logstring in logstrings:
+        chan, sender, logstring = logstrings
+
+        if command in ["NICK","QUIT"]:
+            channels = self.bot.userlist.chans(sender)
+        else:
+            channels = [chan]
+
+        for channel in channels:
             if channel.startswith("#"):
                 logpath = os.path.join(self.logdir,self.bot.config["network"] + "." + channel + ".log")
             else:
