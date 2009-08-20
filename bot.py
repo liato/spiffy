@@ -9,6 +9,7 @@ import datetime
 import traceback
 import sqlite3
 import simplejson as json
+import hashlib
 
 
 from twisted.words.protocols import irc
@@ -47,6 +48,7 @@ class Bot(irc.IRCClient):
             return repr(self)
 
     def connectionMade(self):
+        self._print = self.factory._print
         self.config = self.factory.config
         self.connections = self.factory.connections
         self.connections[self.config['network']] = self
@@ -54,12 +56,12 @@ class Bot(irc.IRCClient):
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
         self.config['logevents'] = [s.upper() for s in self.config['logevents']]
-##        self.logger = IRCLogger(self, "logs/logs.s3db") # to try sqlite, uncomment this and uncomment below
+##        self.logger = IRCLogger(self, "logs/logs.s3db") # to try sqlite, uncomment this and comment out below
         self.logger = IRCLogger(self,"logs")
         self.userlist = UserList(self)
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible to modules
-        self._print = self.factory._print
+        
         
         self.loadModules()
         irc.IRCClient.connectionMade(self)
@@ -70,7 +72,7 @@ class Bot(irc.IRCClient):
         self._print("Loading modules...")
         self.modules = {} #Modules loaded from the modules directory.
         self.doc = {} #Documentation for modules.
-        self.aliases = {} #Aliases for modules.
+        self.aliases = {} #Aliases for module commands.
         modules = []
         if os.path.exists(os.path.join(sys.path[0], 'modules')):
             filenames = []
@@ -302,8 +304,6 @@ class Bot(irc.IRCClient):
         """Determine the function to call for the given command and call
         it with the given arguments."""
 
-        
-        
         method = getattr(self, "irc_%s" % command, None)
         if method is not None:
             try:
@@ -313,7 +313,7 @@ class Bot(irc.IRCClient):
 
         command = (symbolic_to_numeric.get(command, command), command)
 
-        self.logger.log(prefix, command, params, text)
+        self.logger.log(prefix, command, params, text) # Needs to be called before _handleChange
         
         if command[0].upper() in ("JOIN", "352", "353", "KICK", "PART", "QUIT", "NICK"):
             self.userlist._handleChange(prefix, command, params, text)
@@ -590,16 +590,20 @@ class IRCLogger(object):
             if not os.path.basename(self.logdir):
                 self.logdir = os.path.join(self.logdir,"logs.s3db")
 
-            print "Logging to SQLite database at", self.logdir
+            self.bot._print("Logging to SQLite database at %s" % self.logdir)
                         
             self._log = self.sqlitelog
                         
         else:
-            # TODO: add proper handling of the logtype parameter in this case.
-            # right now, it simply uses "/logs/" in the current working dir
-            self._log = self.plaintextlog
+            # logtype will be either an absolute path ("/path/to/logdir/", "C:\logs\", etc)
+            # or a relative path (e.g. "logs/", which would mean a subdir "logs" in the
+            # current working directory, or even "../../logs").
+            self.logdir = os.path.abspath(logtype)
+            
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
+
+            self._log = self.plaintextlog
 
     def log(self, prefix, command, params, text):
         command = command[0].upper()
@@ -647,32 +651,37 @@ class IRCLogger(object):
         else:
             channels = ["#debug"] # fixme
 
-
         conn = sqlite3.connect(self.logdir, detect_types = sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
 
-        for channel in channels:
-
-            # temporary countermeasure to avoid exceptions if channel contains
-            # forbidden characters. to be removed later, ofc
-            if any(c in channel for c in "-!.><|"):
-                continue
-            
+        for channel in channels:            
             if channel.startswith("#"):
-                tablename = self.bot.config["network"] + channel.replace("#","__chan__")
+                tablename = self.bot.config["network"] + u"." + channel
             else:
-                tablename = self.bot.config["network"] + "__pm__" + nick
+                tablename = self.bot.config["network"] + u"." + nick.lower()
 
-            # check if a table exists for the current channel
-            c.execute("select tbl_name from sqlite_master where tbl_name = ?", (tablename,))
+            # SQLite won't accept table names that start in 0-9, so we add spiffy_ in front
+            hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()
+
+            # check if a table exists for the current channel. sqlite_master contains
+            # info about all the tables in a particular SQLite database
+            c.execute("select tbl_name from sqlite_master where tbl_name = ?", (hashname,))
             if not c.fetchone():
-                c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, command TEXT, params TEXT, text TEXT)" % tablename)
-                print "Created table %s in sqlite database" % tablename
+                c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, command TEXT, params TEXT, text TEXT)" % hashname)                
+                self.bot._print("Created table %s (%s) in SQLite database" % (hashname, tablename))
+                
+                # check if the channel index exists in the database
+                c.execute("select tbl_name from sqlite_master where tbl_name = 'spiffy_channels'")
+                if not c.fetchone():
+                    c.execute("CREATE TABLE spiffy_channels (hash TEXT, plaintext TEXT)")
+                    self.bot._print("Created channel index table 'spiffy_channels' in SQLite database")
+
+                c.execute("INSERT INTO spiffy_channels (hash, plaintext) VALUES (?,?)", (hashname, tablename))
 
             # table has been created if it didn't already exist, so we can do our insertions
             query = "INSERT INTO %s (ts, prefix, command, params, text) VALUES (?,?,?,?,?)"
-            c.execute(query % tablename, (timestamp, prefix, command, json.dumps(params), text))
+            c.execute(query % hashname, (timestamp, prefix, command, json.dumps(params), text))
 
 
         c.close()
