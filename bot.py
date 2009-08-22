@@ -76,6 +76,7 @@ class Bot(irc.IRCClient):
         self.userlist = UserList(self)
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible to modules
+        self.sourceURL = None #Disable source reply.
         
         
         self.loadModules()

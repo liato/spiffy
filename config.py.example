@@ -24,6 +24,15 @@ nick = 'spiffy'
 user = 'spiffy'
 
 #
+# password - The password sent to the server when connecting
+#
+#    Most servers don't require a password, it's probably safe
+#    the password to None.
+#
+
+password = None
+
+#
 # name - The 'real name' of the user
 #
 #    If no name is specified the value of nick is used.
