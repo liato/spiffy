@@ -1,21 +1,37 @@
-import time
-import imp
-import os
-import sys
-import re
-import threading
 import codecs
 import datetime
-import traceback
-import sqlite3
-import simplejson as json
 import hashlib
-
+import imp
+import os
+import re
+import sqlite3
+import sys
+import threading
+import time
+import traceback
+import warnings
 
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric, split
 from twisted.internet import reactor, protocol
 
+try:
+    import cjson as json # Try loading the fastest lib first.
+    json.dumps = json.encode
+    json.loads = json.decode
+except ImportError:
+    try:
+        import json # Available in python >= 2.6.
+    except ImportError:
+        try:
+            import simplejson as json # If no json library is found logging to sqlite and mysql will be disabled.
+        except ImportError:
+            json = None
+            
+try:
+    import MySQLdb
+except ImportError:
+    MySQLdb = None
 
 def parsemsg(s):
     """Breaks a message from an IRC server into its prefix, command, arguments and text.
@@ -56,8 +72,7 @@ class Bot(irc.IRCClient):
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
         self.config['logevents'] = [s.upper() for s in self.config['logevents']]
-##        self.logger = IRCLogger(self, "logs/logs.s3db") # to try sqlite, uncomment this and comment out below
-        self.logger = IRCLogger(self,"logs")
+        self.logger = IRCLogger(self, self.config.get('logpath'))
         self.userlist = UserList(self)
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible to modules
@@ -574,36 +589,100 @@ class UserList(object):
 
 class IRCLogger(object):
 
-    def __init__(self, bot, logtype):
+    def __init__(self, bot, logpath):
         self.bot = bot
         self.logdir = "logs"
         self.lastmsg = {}
-
-                
-        if logtype.lower().startswith("mysql"):
-            pass
         
-        elif logtype.lower().startswith("sqlite") or ("." in logtype and logtype.lower().rsplit(".",1)[1] in ["s3db", "db", "sqlite", "sqlite3"]):
-            # logtype is either "sqlite://path/to/db.ext", "logs/db.ext", "/path/to/db.ext" or "C:\path\to\db.ext"
-            self.logdir = os.path.abspath(re.sub("sqlite3?://","",logtype))
+        if logpath.lower().startswith("sqlite") or ("." in logpath and logpath.lower().rsplit(".",1)[1] in ["s3db", "db", "sqlite", "sqlite3"]):
+            logtype = "sqlite"
+
+        elif logpath.lower().startswith("mysql"):
+            logtype = "mysql"
+
+        else:
+            logtype = 'text'
+            
+        if logtype in ['sqlite', 'mysql']:
+            if not json:
+                self.bot._print("WARNING! No json library found, logging to plaintext.", "err")
+                logtype = "text"
+                logpath = "logs"
+
+        if logtype == "mysql":
+            if not MySQLdb:
+                self.bot._print("WARNING! No MySQLdb library found, logging to plaintext.", "err")
+                logtype = "text"
+                logpath = "logs"
+
+            #mysql://user:password@host:port/db?params
+            logpath = logpath.rsplit("?", 1)[0] #Remove params
+            r = re.compile(r"mysql://([^:@]+):([^@]+)@([^:]+)(?::(\d+))?/([^/]+)")
+            m = r.match(logpath)
+            if not m:
+                self.bot._print("WARNING! MySQL connection string is invalid, logging to plaintext.", "err")
+                logtype = "text"
+                logpath = "logs"
+            else:
+                self.mysql_user, self.mysql_pass, self.mysql_host, self.mysql_port, self.mysql_db = m.groups()
+                try:
+                    conn = MySQLdb.connect(host = self.mysql_host, user = self.mysql_user,
+                                         passwd = self.mysql_pass, db = self.mysql_db,
+                                         port = self.mysql_port or 3306, charset = 'utf8')
+                except MySQLdb.Error, e:
+                    self.bot._print("WARNING! Error connectiong to the MySQL database: %s. Logging to plaintext." % e, "err")
+                    logtype = "text"
+                    logpath = "logs"
+                else:
+                    c = conn.cursor()
+        
+                    # Create a channel index table
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")                    
+                        c.execute("""CREATE TABLE IF NOT EXISTS spiffy_channels (
+                                        `hash` char(39) CHARSET utf8 COLLATE utf8_general_ci,
+                                        plaintext text CHARSET utf8 COLLATE utf8_general_ci,
+                                        unique `idx_spiffy_channels` (`hash`)
+                                        ) charset=utf8 collate=utf8_general_ci""")
+                    c.close()
+                    conn.close()
+                    
+                    self._log = self._mysqllog
+
+        
+        if logtype == "sqlite":
+            # logpath is either "sqlite://path/to/db.ext", "logs/db.ext", "/path/to/db.ext" or "C:\path\to\db.ext"
+            self.logdir = os.path.abspath(re.sub("sqlite3?://", "", logpath))
                         
             if not os.path.basename(self.logdir):
-                self.logdir = os.path.join(self.logdir,"logs.s3db")
+                self.logdir = os.path.join(self.logdir, "logs.s3db")
 
             self.bot._print("Logging to SQLite database at %s" % self.logdir)
+            
+            conn = sqlite3.connect(self.logdir, detect_types = sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+
+            # check if the channel index exists in the database
+            c.execute("select tbl_name from sqlite_master where tbl_name = 'spiffy_channels'")
+            if not c.fetchone():
+                c.execute("CREATE TABLE spiffy_channels (hash TEXT, plaintext TEXT)")
+                self.bot._print("Created channel index table 'spiffy_channels' in SQLite database")
+            c.close()
+            conn.commit()
+            conn.close()
+            
+            self._log = self._sqlitelog
                         
-            self._log = self.sqlitelog
-                        
-        else:
-            # logtype will be either an absolute path ("/path/to/logdir/", "C:\logs\", etc)
+        elif logtype == "text":
+            # logpath will be either an absolute path ("/path/to/logdir/", "C:\logs\", etc)
             # or a relative path (e.g. "logs/", which would mean a subdir "logs" in the
             # current working directory, or even "../../logs").
-            self.logdir = os.path.abspath(logtype)
+            self.logdir = os.path.abspath(logpath)
             
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-
-            self._log = self.plaintextlog
+            self._log = self._plaintextlog
 
     def log(self, prefix, command, params, text):
         command = command[0].upper()
@@ -638,13 +717,67 @@ class IRCLogger(object):
             return (None, nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) Quit (%s)" % (user, host, text)))
 
         
-    def sqlitelog(self, prefix, command, params, text):  
+    def _mysqllog(self, prefix, command, params, text):  
         nick, user, host = sourcesplit(prefix)
+        if not user:
+            return # Don't logg server messages.
         timestamp = datetime.datetime.now()
         
-        if command in ["PRIVMSG","PART","KICK","TOPIC","MODE"]:
+        if command in ["PRIVMSG", "PART", "KICK", "TOPIC", "MODE", "NOTICE"]:
             channels = [params[0].lower()]
-        elif command in ["NICK","QUIT"]:
+        elif command in ["NICK", "QUIT"]:
+            channels = self.bot.userlist.chans(nick)
+        elif command in ["JOIN"]:
+            channels = [text or params[0].lower()]
+        else:
+            channels = ["#debug"] # fixme
+
+        conn = MySQLdb.connect(host = self.mysql_host, user = self.mysql_user,
+                             passwd = self.mysql_pass, db = self.mysql_db,
+                             port = self.mysql_port or 3306, charset = 'utf8')
+        c = conn.cursor()
+
+        for channel in channels:            
+            if channel.startswith("#"):
+                tablename = self.bot.config["network"] + u"." + channel
+            else:
+                tablename = self.bot.config["network"] + u"." + nick.lower()
+
+            hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()
+
+            # check if a table exists for the current channel. sqlite_master contains
+            # info about all the tables in a particular SQLite database
+            if nick.lower() == self.bot.nickname or not channel.startswith('#'):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")                    
+                    c.execute("""CREATE TABLE IF NOT EXISTS %s (
+                                    `ts` datetime,
+                                    `prefix` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
+                                    `nick` varchar(50) CHARSET utf8 COLLATE utf8_general_ci,
+                                    `command` varchar(7) CHARSET utf8 COLLATE utf8_general_ci,
+                                    `params` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
+                                    `text` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
+                                    KEY `nick` (`nick`,`command`) 
+                                    ) charset=utf8 collate=utf8_general_ci;""" % hashname)
+                c.execute("INSERT INTO spiffy_channels (hash, plaintext) VALUES (%s, %s) ON DUPLICATE KEY UPDATE hash=hash", (hashname, tablename))
+
+            # table has been created if it didn't already exist, so we can do our insertions
+            c.execute("INSERT INTO %s" % hashname + " (ts, prefix, nick, command, params, text) VALUES (%s, %s, %s, %s, %s, %s)", (timestamp, prefix, nick, command, json.dumps(params), text))
+
+
+        c.close()
+        conn.commit()
+        conn.close()
+
+    def _sqlitelog(self, prefix, command, params, text):  
+        nick, user, host = sourcesplit(prefix)
+        if not user:
+            return # Don't logg server messages.
+        timestamp = datetime.datetime.now()
+        
+        if command in ["PRIVMSG", "PART", "KICK", "TOPIC", "MODE", "NOTICE"]:
+            channels = [params[0].lower()]
+        elif command in ["NICK", "QUIT"]:
             channels = self.bot.userlist.chans(nick)
         elif command in ["JOIN"]:
             channels = [text or params[0].lower()]
@@ -666,29 +799,24 @@ class IRCLogger(object):
 
             # check if a table exists for the current channel. sqlite_master contains
             # info about all the tables in a particular SQLite database
-            c.execute("select tbl_name from sqlite_master where tbl_name = ?", (hashname,))
-            if not c.fetchone():
-                c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, command TEXT, params TEXT, text TEXT)" % hashname)                
-                self.bot._print("Created table %s (%s) in SQLite database" % (hashname, tablename))
-                
-                # check if the channel index exists in the database
-                c.execute("select tbl_name from sqlite_master where tbl_name = 'spiffy_channels'")
+            if nick.lower() == self.bot.nickname or not channel.startswith('#'):
+                c.execute("select tbl_name from sqlite_master where tbl_name = ?", (hashname,))
                 if not c.fetchone():
-                    c.execute("CREATE TABLE spiffy_channels (hash TEXT, plaintext TEXT)")
-                    self.bot._print("Created channel index table 'spiffy_channels' in SQLite database")
-
-                c.execute("INSERT INTO spiffy_channels (hash, plaintext) VALUES (?,?)", (hashname, tablename))
+                    c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, nick TEXT, command TEXT, params TEXT, text TEXT)" % hashname)
+                    c.execute("CREATE INDEX idx_%s ON %s (command DESC, nick DESC, prefix DESC)" % (hashname, hashname))
+                    self.bot._print("Created table %s (%s) in SQLite database" % (hashname, tablename))
+                    c.execute("INSERT INTO spiffy_channels (hash, plaintext) VALUES (?,?)", (hashname, tablename))
 
             # table has been created if it didn't already exist, so we can do our insertions
-            query = "INSERT INTO %s (ts, prefix, command, params, text) VALUES (?,?,?,?,?)"
-            c.execute(query % hashname, (timestamp, prefix, command, json.dumps(params), text))
+            query = "INSERT INTO %s (ts, prefix, nick, command, params, text) VALUES (?,?,?,?,?,?)"
+            c.execute(query % hashname, (timestamp, prefix, nick, command, json.dumps(params), text))
 
 
         c.close()
         conn.commit()
         conn.close()
                         
-    def plaintextlog(self, prefix, command, params, text):
+    def _plaintextlog(self, prefix, command, params, text):
         timestamp = time.strftime("[%H:%M:%S]")
         logs = getattr(self.bot, "logs", {})
         

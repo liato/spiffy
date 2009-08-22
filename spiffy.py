@@ -10,8 +10,8 @@ connections = {}
 
 
 if __name__ == '__main__':
-    if sys.version_info < (2, 4): 
-        print >> sys.stderr, 'Error: Requires Python 2.4 or later, from www.python.org'
+    if sys.version_info < (2, 5): 
+        print >> sys.stderr, 'Error: Requires Python 2.5 or later, from www.python.org'
         sys.exit(1)    
 
     config_name = os.path.join(sys.path[0], 'config.py')
@@ -29,7 +29,8 @@ if __name__ == '__main__':
                                 'logevents': ['PRIVMSG', 'JOIN', 'PART',
                                               'MODE', 'TOPIC', 'KICK', 'QUIT',
                                               'NOTICE', 'NICK'],
-                                'verbose': True, 'reconnect': 10}
+                                'verbose': True, 'reconnect': 10,
+                                'logpath': 'logs'}
             for x in config_defaults:
                 serverconfig[x] = config_defaults[x]
             for x in config.__dict__:

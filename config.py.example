@@ -1,15 +1,228 @@
 #!/usr/bin/env python
+#                                 _ ________                         #
+#                     _________  (_) __/ __/__  __                   #
+#                    / ___/ __ \/ / /_/ /_ / / / /                   #
+#                   (__  ) /_/ / / __/ __// /_/ /                    #
+#                  /____/ .___/_/_/ /_/   \__, /                     #
+#                      /_/               /____/                      #
+#                                                                    #
+#-#-#-#-#-#-#-#-#-#-#-#-#      GENERAL       #-#-#-#-#-#-#-#-#-#-#-#-#
+#                                                                    #
+# nick - The nickname to use when connecting to an IRC server
+#
+#    The default nickname is 'spiffy'.
+#
+
 nick = 'spiffy'
+
+#
+# user - The username that is sent to the IRC server
+#
+#    If no username is specified the value of nick is used.
+#
+
+user = 'spiffy'
+
+#
+# name - The 'real name' of the user
+#
+#    If no name is specified the value of nick is used.
+#
+
+name = "spiffy - http://github.com/liato/spiffy"
+
+#
+# name - A list of channels to join.
+#
+#    Separate the channel key with a space.
+#
+
+channels = ['#spiffy secretpassword', '#help']
+
+#
+# versionreply - The text to send back when a user sends a
+#                version request using CTCP
+#
+#    To disable version reply:
+#        versionreply = None
+#
+
 versionreply = "I'm spiffy!"
-channels = ['#spiffy', '#help']
-ownermask = '@(nsa.gov|localhost|liato.users.mgnet)'
-#Command prefix
-prefix = r'!'
-#Exclude the following modules
-exclude = ['admin']
-#Print error messages to channel
+
+#
+# ownermask - A regular expression matching the bots owners hostmask
+#
+#    When a user attempts to execute an 'admin-only' command ownermask
+#    is matched against this users nick!user@host.
+#
+#    To let anyone with the nickname 'spaffy' execute admin commands:
+#        ownermask = 'spaffy!'
+#
+#    To let anyone with a username starting with
+#    'foo'  execute admin commands:
+#        ownermask = '.+!~?foo[^@]+'
+#
+#    To let anyone connection from sweden execute admin commands:
+#        ownermask = r'\.se$'
+#
+#    If the ownermask is set to None no admin commands will execute:
+#        ownermask = None
+#
+
+ownermask = '@(127.0.0.1|localhost)'
+
+#
+# prefix - A singe character used to trigger commands
+#
+#    The first word after the prefix will be matched against known
+#    commands and thereafter the command, if found, will be executed.
+#
+#                      !help args
+#                      /   |    \-- args to the command
+#        prefix = ! --/    |
+#                          |-- command = help
+#
+#    Execute the help command by writing !help in a channel:
+#        prefix = '!'
+#
+#    Execute the commands command by writing @commands in a channel:
+#        prefix = '@'
+#
+#    The default prefix is !:
+
+prefix = '!'
+
+#
+# chandebug - Print error messages to channel
+#
+#    Set to False if you don't want error messages from modules
+#    to be sent to the channel where the command was issued:
+#        chandebug = False
+#
+#    The default setting is to enable error printing.
+
 chandebug = True
 
-networks = {"quakenet": {"host": ["irc.quakenet.org:6668", "irc.eu.quakenet.org"]},
-            "efnet": {"host": "irc.efnet.org", "nick": "SPiFFY"}
-            }
+#                                                                    #
+#-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+
+#-#-#-#-#-#-#-#-#-#-#-#-#      LOGGING       #-#-#-#-#-#-#-#-#-#-#-#-#
+#                                                                    #
+# pathname - The path to the log files/database
+#
+#    For plain text logging logpath can be a relative
+#    or absolute path:
+#        logpath = "logfiles/"
+#            or
+#        logpath = "C:\Windows\logs\irc\"
+#            or
+#        logpath = "/home/spiffy/logs/"
+#
+#    For sqlite logging logpath should start with sqlite://.
+#    If the optional filename is not specified 'logs.s3db'
+#    will be used:
+#        logpath = "sqlite://logfiles/"
+#            or
+#        logpath = "sqlite://C:\Windows\logs\irc\"
+#            or
+#        logpath = "sqlite:///home/spiffy/logs/logs.db"
+#            or
+#        logpath = "sqlite://mylogs.db"
+#
+#    For mysql logging logpath should use the following format:
+#        mysql://user:password@host[:port]/database
+#        logpath = "mysql://spiffy:omfg@mysql.mywebhost.com:3306/logs"
+#            or
+#        logpath = "mysql://irc:passlord@localhost/spiffy"
+#
+#    To disable logging completly set logpath to None:
+#        logpath = None
+#
+#    The default is plaintext logging to the logs directory:
+
+logpath = 'logs/'
+
+#
+# logevents - A list of events to log
+#
+#    For anything to be logged a list of events has to be specified.
+#    Avaiable events are:
+#        JOIN    - A user joins a channel.
+#        KICK    - A user is kicked from a channel.
+#        MODE    - Channel modes are changed.
+#        NICK    - A user changes nickname.
+#        NOTICE  - A user sends a notice to a channel or user.
+#        PART    - A user parts a channel.
+#        PRIVMSG - A user sends a message to a channel or user.
+#        QUIT    - A user quits IRC.
+#        TOPIC   - A user changes the topic in a channel.
+#
+#    To only log what is being said in a channel:
+#        logevents = ['PRIVMSG', 'NOTICE']
+#
+#    To only log topic changes:
+#        logevents = ['TOPIC']
+#
+#    The default is to log all available events:
+
+logevents = ['JOIN', 'KICK', 'MODE', 'NICK', 'NOTICE', 'PART',
+             'PRIVMSG', 'QUIT', 'TOPIC']
+
+#                                                                    #
+#-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+
+#-#-#-#-#-#-#-#-#-#-#-#-#  NETWORK SETTINGS  #-#-#-#-#-#-#-#-#-#-#-#-#
+#                                                                    #
+# networks - A dict of networks to connect to
+#
+#    The networks setting should contain atleast one network with
+#    atleast one host with an optional port.
+#
+#    Server specific settings can be made here by giving a key in
+#    a network dict the same name as a setting variable.
+#    Settings are first loaded from the config file and then
+#    overwritten by network specific settings specified bellow.
+#
+#    Connect to QuakeNet on port 6667 with the defaults settings:
+#        networks = {
+#            'quakenet': {
+#                'host': 'irc.quakenet.org'
+#                }
+#            }
+#
+#    The 'host' key can also be a list of hosts, when the bot fails
+#    to connect or disconnects from one server it automatically
+#    jumps to the next one:
+#        networks = {
+#            'quakenet': {
+#                'host': ['jubii.dk.quakenet.org',
+#                         'euroserv.fr.quakenet.org:6667']
+#                }
+#            }
+#
+#    Connect to QuakeNet with a different nickname and different
+#    channels to join:
+#        networks = {
+#            'quakenet': {
+#                'host': 'irc.quakenet.org',
+#                'nick': 'yffips',
+#                'channels': ['#halflife', '#idlers']
+#                }
+#            }
+#
+#    Connect to QuakeNet and freenode with a different settings:
+#        networks = {
+#            'quakenet': {
+#                'host': 'irc.quakenet.org',
+#                'nick': 'gamer',
+#                'channels': ['#halflife', '#idlers']
+#            'freenode': {
+#                'host': ['kornbluth.freenode.net', 'orwell.freenode.net'],
+#                'nick': 'coder',
+#                'channels': ['#spiffy', '#python', '#help'],
+#                'logpath': 'sqlite://logs/freenode.db',
+#                'logevents': ['JOIN', 'KICK','NOTICE', 'PART', 'PRIVMSG']
+#                }
+#            }
+#                                                                    #
+#-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
