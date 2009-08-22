@@ -156,6 +156,8 @@ logpath = 'logs/'
 #
 #    For anything to be logged a list of events has to be specified.
 #    Avaiable events are:
+#        332     - Channel topic is received.
+#        333     - Nick and set date for channel topic is received.
 #        JOIN    - A user joins a channel.
 #        KICK    - A user is kicked from a channel.
 #        MODE    - Channel modes are changed.
@@ -174,8 +176,8 @@ logpath = 'logs/'
 #
 #    The default is to log all available events:
 
-logevents = ['JOIN', 'KICK', 'MODE', 'NICK', 'NOTICE', 'PART',
-             'PRIVMSG', 'QUIT', 'TOPIC']
+logevents = ['332', '333', 'JOIN', 'KICK', 'MODE', 'NICK',
+             'NOTICE', 'PART', 'PRIVMSG', 'QUIT', 'TOPIC']
 
 #                                                                    #
 #-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#

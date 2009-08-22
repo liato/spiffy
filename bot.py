@@ -71,9 +71,10 @@ class Bot(irc.IRCClient):
         self.nickname = self.config.get('nick', 'spiffy')
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
+        self.me = '%s!%s@unknown' % (self.nickname, self.username)
         self.config['logevents'] = [s.upper() for s in self.config['logevents']]
         self.logger = IRCLogger(self, self.config.get('logpath'))
-        self.userlist = UserList(self)
+        self.chanlist = ChanList(self)
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible to modules
         self.sourceURL = None #Disable source reply.
@@ -255,14 +256,14 @@ class Bot(irc.IRCClient):
                     "q": "~", #owner (used by Unreal)
                     "!": "!"  #service (used by KineIRCD)
                     }
-        if args and channel in self.userlist.channels:
+        if args and channel in self.chanlist.channels:
             for user, mode in zip(args,list(modes)):
                 if mode not in modedict.keys():
                     continue
                 user = user.lower()
                 
-                if user in self.userlist[channel]:
-                    currentmode = self.userlist[channel][user]["mode"]
+                if user in self.chanlist[channel]['users']:
+                    currentmode = self.chanlist[channel]['users'][user]["mode"]
                     
                     if set:
                         if modedict[mode] not in currentmode:
@@ -270,7 +271,7 @@ class Bot(irc.IRCClient):
                     else:
                         currentmode = currentmode.replace(modedict[mode],"")
 
-                    self.userlist[channel][user]["mode"] = currentmode
+                    self.chanlist[channel]['users'][user]["mode"] = currentmode
 
     def signedOn(self):
         """Called when bot has succesfully signed on to server."""
@@ -285,13 +286,13 @@ class Bot(irc.IRCClient):
     def msg(self, receiver, message):
         lines = message.split("\n")
         for line in lines:
-            self.logger.log(self.userlist.me, 'PRIVMSG', [receiver], line)
+            self.logger.log(self.me, 'PRIVMSG', [receiver], line)
             self.sendLine("PRIVMSG %s :%s" % (receiver, line))
 
     def notice(self, receiver, message):
         lines = message.split("\n")
         for line in lines:
-            self.logger.log(self.userlist.me, 'NOTICE', [receiver], line)
+            self.logger.log(self.me, 'NOTICE', [receiver], line)
             self.sendLine("NOTICE %s :%s" % (receiver, line))
 
     def sendLine(self, line):
@@ -338,8 +339,8 @@ class Bot(irc.IRCClient):
 
         self.logger.log(prefix, command, params, text) # Needs to be called before _handleChange
         
-        if command[0].upper() in ("JOIN", "352", "353", "KICK", "PART", "QUIT", "NICK"):
-            self.userlist._handleChange(prefix, command, params, text)
+        if command[0].upper() in ("JOIN", "331", "332", "333", "352", "353", "KICK", "PART", "QUIT", "NICK", "TOPIC"):
+            self.chanlist.handleChange(prefix, command, params, text)
         if command[0] == "005":
             self.sendLine('PROTOCTL NAMESX') 
         
@@ -450,30 +451,30 @@ class QuickReplyWrapper(object):
             self.bot.msg(self.input.sender, msg)
 
 
-class UserList(object):
+class ChanList(object):
 
     def __init__(self, bot):
         self.channels = {}
         self.bot = bot
-        self.me = '%s!%s@unknown' % (bot.nickname, bot.username)
         
     def __getitem__(self, attr, default=None):
         return self.channels[attr]
         
-    def _handleChange(self, prefix, command, params, text):
-        command = command[0]
+    def handleChange(self, prefix, command, params, text):
+        command = command[0].lower()
         nick, user, host = sourcesplit(prefix or '')
         chan = text or params[0]
         chan = chan.lower()
         
         #JOIN
-        if command.lower() == "join":
+        if command == "join":
             #Clear the channels userlist and issue a who command when the bot joins a chan
             if nick == self.bot.nickname:
-                self.channels[chan] = {}
-                self.bot.sendLine("WHO %s" % chan)
-                self.bot.sendLine("NAMES %s" % chan)
-            self.channels[chan][nick.lower()] = {'nick': nick, 'user': user, 'host': host, 'mode': None}
+                self.channels[chan] = { 'users': {}, 'topic': [None, None, None], 'created': None, 'modes': None }
+                self.bot.sendLine('MODE %s' % chan)
+                self.bot.sendLine('WHO %s' % chan)
+                self.bot.sendLine('NAMES %s' % chan)
+            self.channels[chan]['users'][nick.lower()] = {'nick': nick, 'user': user, 'host': host, 'mode': None}
 
         #RPL_WHOREPLY
         elif command == "352":
@@ -482,10 +483,10 @@ class UserList(object):
             user = params[2]
             host = params[3]
             if not chan in self.channels:
-                self.channels[chan] = {}
-            self.channels[chan][nick.lower()] = {'nick': nick, 'user': user, 'host': host, 'mode': None}
+                self.channels[chan] = { 'users': {}, 'topic': [None, None, None], 'created': None, 'modes': None }
+            self.channels[chan]['users'][nick.lower()] = {'nick': nick, 'user': user, 'host': host, 'mode': None}
             if nick == self.bot.nickname:
-                self.me = '%s!%s@%s' % (nick, user, host)
+                self.bot.me = '%s!%s@%s' % (nick, user, host)
             
         #RPL_NAMREPLY
         elif command == "353":
@@ -496,54 +497,92 @@ class UserList(object):
                 for nick in nicks:
                     m = exp.match(nick)
                     if m.group('nick') in self.channels[chan]:
-                        self.channels[chan][m.group('nick')]['mode'] = m.group('mode')
+                        self.channels[chan]['users'][m.group('nick')]['mode'] = m.group('mode')
 
         #KICK
-        elif command.lower() == "kick":
+        elif command == "kick":
             chan = params[0].lower()
             nick = params[1].lower()
             if chan in self.channels:
                 if nick == self.bot.nickname.lower():
                     #Remove channel from userlist when the bot is kicked from the channel.
                     del self.self.channels[chan]
-                elif nick in self.channels[chan]:
-                    del self.channels[chan][nick]
+                elif nick in self.channels[chan]['users']:
+                    del self.channels[chan]['users'][nick]
 
         #PART
-        elif command.lower() == "part":
+        elif command == "part":
             chan = params[0].lower()
             nick = nick.lower()
             if chan in self.channels:
                 if nick == self.bot.nickname.lower():
-                    #Remove channel from userlist when the bot is kicked from the channel.
+                    #Remove channel from userlist when the bot parts a channel
                     del self.self.channels[chan]
-                elif nick in self.channels[chan]:
-                    del self.channels[chan][nick]                    
+                elif nick in self.channels[chan]['users']:
+                    del self.channels[chan]['users'][nick]                    
 
         #QUIT
-        elif command.lower() == "quit":
+        elif command == "quit":
             nick = nick.lower()
             for chan in self.channels:
-                if nick in self.channels[chan]:
-                    del self.channels[chan][nick]
+                if nick in self.channels[chan]['users']:
+                    del self.channels[chan]['users'][nick]
                 
         #NICK
-        elif command.lower() == "nick":
+        elif command == "nick":
             nick = nick.lower()
             newnick = params[0]
             for chan in self.channels:
-                if nick in self.channels[chan]:
-                    self.channels[chan][newnick.lower()] = self.channels[chan][nick]
-                    self.channels[chan][newnick.lower()]['nick'] = newnick
+                if nick in self.channels[chan]['users']:
+                    self.channels[chan]['users'][newnick.lower()] = self.channels[chan]['users'][nick]
+                    self.channels[chan]['users'][newnick.lower()]['nick'] = newnick
                     if nick != newnick.lower():
-                        del self.channels[chan][nick] 
+                        del self.channels[chan]['users'][nick]
+
+        #RPL_NOTOPIC
+        elif command == "331":
+            chan = params[1].lower()
+            self.channels[chan]['topic'] = [None, None, None]
+
+        #RPL_TOPIC
+        elif command == "332":
+            chan = params[1].lower()
+            self.channels[chan]['topic'][0] = text
+
+        #RPL_TOPIC_SETBY
+        elif command == "333":
+            chan = params[1].lower()
+            self.channels[chan]['topic'][1] = params[2]
+            try:
+                self.channels[chan]['topic'][2] = datetime.datetime.fromtimestamp(int(params[3]))
+            except (SyntaxError, ValueError, TypeError):
+                pass
+
+        #TOPIC
+        elif command == "topic":
+            chan = params[0].lower()
+            self.channels[chan]['topic'] = [text, prefix, datetime.datetime.now()]
+
+        #RPL_CHANNELMODEIS
+        elif command == "324":
+            chan = params[0].lower()
+            self.channels[chan]['modes'] = params[2:]
+
+        #RPL_CHANNEL_CREATED
+        elif command == "329":
+            chan = params[0].lower()
+            try:
+                self.channels[chan]['created'] = datetime.datetime.fromtimestamp(int(params[2]))
+            except (SyntaxError, ValueError, TypeError):
+                pass
+
 
     #Is <nick> on <chan>?
     def ison(self, nick, chan):
         nick = nick.lower()
         chan = chan.lower()
         if chan in self.channels:
-            if nick in self.channels[chan]:
+            if nick in self.channels[chan]['users']:
                 return True
         return False
     
@@ -554,9 +593,9 @@ class UserList(object):
         chan = chan.lower()
         if self.ison(nick, chan):
             if attr == 'all':
-                return self.channels[chan][nick]
+                return self.channels[chan]['users'][nick]
             elif attr in ('nick', 'user', 'host', 'mode'):
-                return self.channels[chan][nick][attr]
+                return self.channels[chan]['users'][nick][attr]
         return None
     
     #Returns <nick>'s modes on <chan>
@@ -564,7 +603,7 @@ class UserList(object):
         nick = nick.lower()
         chan = chan.lower()
         if self.ison(nick, chan):
-            return self.channels[chan][nick]['mode']
+            return self.channels[chan]['users'][nick]['mode']
         return None
     
     #Is <nick> op'd on <chan>?
@@ -591,7 +630,7 @@ class UserList(object):
     def chans(self, nick):
         nick = nick.lower()
         return [chan for chan in self.channels if nick in
-                self.channels[chan]]
+                self.channels[chan]['users']]
 
 
 class IRCLogger(object):
@@ -730,7 +769,10 @@ class IRCLogger(object):
             return (None, nick, "%s * %s is now known as %s\r\n" % (timestamp, nick, params[0]))
         elif command == "QUIT":
             return (None, nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) Quit (%s)" % (user, host, text)))
-
+        elif command == "332":
+            return (params[1].lower(), nick, "%s * Topic is '%s'\r\n" % (timestamp, text))
+        elif command == "333":
+            return (params[1].lower(), nick, "%s * Set by %s on %s\r\n" % (timestamp, params[2], datetime.datetime.fromtimestamp(int(params[3]))))
         
     def _mysqllog(self, prefix, command, params, text):  
         nick, user, host = sourcesplit(prefix)
@@ -741,7 +783,9 @@ class IRCLogger(object):
         if command in ["PRIVMSG", "PART", "KICK", "TOPIC", "MODE", "NOTICE"]:
             channels = [params[0].lower()]
         elif command in ["NICK", "QUIT"]:
-            channels = self.bot.userlist.chans(nick)
+            channels = self.bot.chanlist.chans(nick)
+        elif command in ["332", "333"]:
+            channels = [params[1].lower()]
         elif command in ["JOIN"]:
             channels = [text or params[0].lower()]
         else:
@@ -793,7 +837,9 @@ class IRCLogger(object):
         if command in ["PRIVMSG", "PART", "KICK", "TOPIC", "MODE", "NOTICE"]:
             channels = [params[0].lower()]
         elif command in ["NICK", "QUIT"]:
-            channels = self.bot.userlist.chans(nick)
+            channels = self.bot.chanlist.chans(nick)
+        elif command in ["332", "333"]:
+            channels = [params[1].lower()]
         elif command in ["JOIN"]:
             channels = [text or params[0].lower()]
         else:
@@ -842,7 +888,7 @@ class IRCLogger(object):
         chan, sender, logstring = logstrings
 
         if command in ["NICK","QUIT"]:
-            channels = self.bot.userlist.chans(sender)
+            channels = self.bot.chanlist.chans(sender)
         else:
             channels = [chan]
 
@@ -859,13 +905,7 @@ class IRCLogger(object):
                 f.write("\r\nSession Start: %s\r\n" % time.strftime("%a %b %d %H:%M:%S %Y"))
                 f.write("Session Ident: %s\r\n" % channel)
                 f.write("%s * Now talking in %s\r\n" % (timestamp, channel))
-                
-                # not sure how to get this info, but it's necessary if we strive for
-                # compatibility with the mIRC log format (to allow the use of third
-                # party log analyzers for stats and the like)
-                f.write("%s * Topic is 'XXXXXXXXXXXX'\r\n" % timestamp)
-                f.write("%s * Set by XXXXXXX on XXXXXXX\r\n" % timestamp)
-                
+               
                 logs[channel] = f
 
             if datetime.date.today() > self.lastmsg[channel]:
@@ -903,7 +943,7 @@ class BotFactory(protocol.ClientFactory):
 
     def clientConnectionLost(self, connector, reason):
         """If we get disconnected, reconnect to server."""
-        self._print('Disconnected from %s.' % self.config.get('network'))
+        self._print('Disconnected from %s (%s:%s).' % (self.config.get('network'), self.config['activeserver'][0], self.config['activeserver'][1]))
         if not self.config.get('reconnect') == False:
             activeservernum = self.config.get('activeservernum', -1)
             if activeservernum >= 0:
@@ -930,5 +970,5 @@ class BotFactory(protocol.ClientFactory):
             connector.connect()
 
     def clientConnectionFailed(self, connector, reason):
-        self._print("Connection failed: %s" % reason, 'err')
-        reactor.stop()
+        self.clientConnectionLost(connector, reasoon)
+        

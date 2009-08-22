@@ -28,7 +28,7 @@ if __name__ == '__main__':
                                'chandebug': True, 'channels': [],
                                 'logevents': ['PRIVMSG', 'JOIN', 'PART',
                                               'MODE', 'TOPIC', 'KICK', 'QUIT',
-                                              'NOTICE', 'NICK'],
+                                              'NOTICE', 'NICK', '332', '333'],
                                 'verbose': True, 'reconnect': 10,
                                 'logpath': 'logs'}
             for x in config_defaults:
