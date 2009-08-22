@@ -596,6 +596,11 @@ class UserList(object):
 class IRCLogger(object):
 
     def __init__(self, bot, logpath):
+        if logpath == None:
+            self.enabled = False
+            return
+        else:
+            self.enabled = True
         self.bot = bot
         self.logdir = "logs"
         self.lastmsg = {}
@@ -691,6 +696,9 @@ class IRCLogger(object):
             self._log = self._plaintextlog
 
     def log(self, prefix, command, params, text):
+        if not self.enabled:
+            return
+        
         command = command[0].upper()
         if not command in self.bot.config['logevents']:
             return
