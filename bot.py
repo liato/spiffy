@@ -281,10 +281,17 @@ class Bot(irc.IRCClient):
         """This will get called when the bot joins the channel."""
         self._print("Joined %s" % channel)
 
-    def msg(self,receiver,msg):
-        lines = msg.split("\n")
+    def msg(self, receiver, message):
+        lines = message.split("\n")
         for line in lines:
+            self.logger.log(self.userlist.me, 'PRIVMSG', [receiver], line)
             self.sendLine("PRIVMSG %s :%s" % (receiver, line))
+
+    def notice(self, receiver, message):
+        lines = message.split("\n")
+        for line in lines:
+            self.logger.log(self.userlist.me, 'NOTICE', [receiver], line)
+            self.sendLine("NOTICE %s :%s" % (receiver, line))
 
     def sendLine(self, line):
         if self.encoding is not None:
@@ -334,10 +341,6 @@ class Bot(irc.IRCClient):
             self.userlist._handleChange(prefix, command, params, text)
         if command[0] == "005":
             self.sendLine('PROTOCTL NAMESX') 
-            #print self.modules.values()
-        #"print line
-        #print prefix, command, params, text
-        #print "\n"
         
         modules = self.modules.values()
         for module in modules:
@@ -451,6 +454,7 @@ class UserList(object):
     def __init__(self, bot):
         self.channels = {}
         self.bot = bot
+        self.me = '%s!%s@unknown' % (bot.nickname, bot.username)
         
     def __getitem__(self, attr, default=None):
         return self.channels[attr]
@@ -479,6 +483,8 @@ class UserList(object):
             if not chan in self.channels:
                 self.channels[chan] = {}
             self.channels[chan][nick.lower()] = {'nick': nick, 'user': user, 'host': host, 'mode': None}
+            if nick == self.bot.nickname:
+                self.me = '%s!%s@%s' % (nick, user, host)
             
         #RPL_NAMREPLY
         elif command == "353":
