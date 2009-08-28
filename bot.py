@@ -632,6 +632,37 @@ class ChanList(object):
         return [chan for chan in self.channels if nick in
                 self.channels[chan]['users']]
 
+class RCursor(object):
+    """A reconnecting cursor for MySQLdb."""
+    def __init__(self, connection): 
+        self.connection = connection
+        self.cursor = connection.cursor()
+
+    def __getattribute__(self, attr):
+        try:
+            return object.__getattribute__(self, attr)
+        except AttributeError:
+            return getattr(object.__getattribute__(self, 'cursor'), attr)
+        
+    def execute(self, sql, args=None):
+        try:
+            return self.cursor.execute(sql, args)
+        except (AttributeError, MySQLdb.OperationalError), e:
+            if e.args[0] == 2006: #MySQL server has gone away
+                self.connection.ping(True) # Reconnect
+                self.cursor = self.connection.cursor()
+                return self.cursor.execute(sql, args)
+            raise
+    
+    def executemany(self, sql, args=None):
+        try:
+            return self.cursor.executemany(sql, args)
+        except (AttributeError, MySQLdb.OperationalError), e:
+            if e.args[0] == 2006: #MySQL server has gone away
+                self.connection.ping(True) # Reconnect
+                self.cursor = self.connection.cursor()
+                return self.cursor.executemany(sql, args)
+            raise
 
 class IRCLogger(object):
 
@@ -685,18 +716,18 @@ class IRCLogger(object):
                     logtype = "text"
                     logpath = "logs"
                 else:
-                    c = conn.cursor()
+                    c = RCursor(conn) #conn.cursor()
         
                     # Create a channel index table
                     with warnings.catch_warnings():
-                        warnings.simplefilter("ignore")                    
+                        warnings.simplefilter("ignore") #Ignore table exists warnings from MySQL.
                         c.execute("""CREATE TABLE IF NOT EXISTS spiffy_channels (
                                         `hash` char(39) CHARSET utf8 COLLATE utf8_general_ci,
                                         plaintext text CHARSET utf8 COLLATE utf8_general_ci,
                                         unique `idx_spiffy_channels` (`hash`)
                                         ) charset=utf8 collate=utf8_general_ci""")
-                    c.close()
-                    conn.close()
+                    self.mysql_conn = conn
+                    self.mysql_curs = c
                     
                     self._log = self._mysqllog
 
@@ -791,10 +822,12 @@ class IRCLogger(object):
         else:
             channels = ["#debug"] # fixme
 
-        conn = MySQLdb.connect(host = self.mysql_host, user = self.mysql_user,
+        """conn = MySQLdb.connect(host = self.mysql_host, user = self.mysql_user,
                              passwd = self.mysql_pass, db = self.mysql_db,
                              port = self.mysql_port or 3306, charset = 'utf8')
-        c = conn.cursor()
+        c = conn.cursor()"""
+        conn = self.mysql_conn
+        c = self.mysql_curs
 
         for channel in channels:            
             if channel.startswith("#"):
@@ -824,9 +857,9 @@ class IRCLogger(object):
             c.execute("INSERT INTO %s" % hashname + " (ts, prefix, nick, command, params, text) VALUES (%s, %s, %s, %s, %s, %s)", (timestamp, prefix, nick, command, json.dumps(params), text))
 
 
-        c.close()
+        #c.close()
         conn.commit()
-        conn.close()
+        #conn.close()
 
     def _sqlitelog(self, prefix, command, params, text):  
         nick, user, host = sourcesplit(prefix)
