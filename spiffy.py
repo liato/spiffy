@@ -53,14 +53,23 @@ if __name__ == '__main__':
                 else:
                     serverconfig['activeservernum'] = -1
                 
+                ssl = False
                 if ':' in server:
                     server, port = server.split(':')
+                    if port.startswith('+'):
+                        port = port[1:]
+                        from twisted.internet import ssl
+                        contextFactory = ssl.ClientContextFactory()
+                        ssl = True
                     port = int(port)
 
                 serverconfig['activeserver'] = (server, port or 6667)
-                reactor.connectTCP(server, port or 6667, BotFactory(serverconfig, connections))
+                if ssl:
+                    reactor.connectSSL(server, port or 6667, BotFactory(serverconfig, connections), contextFactory)
+                else:
+                    reactor.connectTCP(server, port or 6667, BotFactory(serverconfig, connections))
         reactor.run()
 
     else:
-        print >> sys.stderr, "Error: No netorks to connect to."
+        print >> sys.stderr, "Error: No networks to connect to."
         sys.exit(1)

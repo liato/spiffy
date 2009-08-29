@@ -201,9 +201,19 @@ logevents = ['332', '333', 'JOIN', 'KICK', 'MODE', 'NICK',
 #                }
 #            }
 #
+#    To connect using SSL you need to prefix the port with a '+'.
+#    Connect to ChatSpike using SSL and default settings:
+#        networks = {
+#            'chatspike': {
+#                'host': 'irc.chatspike.net:+6668'
+#                }
+#            }
+#
 #    The 'host' key can also be a list of hosts, when the bot fails
 #    to connect or disconnects from one server it automatically
-#    jumps to the next one:
+#    jumps to the next one.
+#    The list of servers can not contain both SSL and non SSL
+#    servers at the same time:
 #        networks = {
 #            'quakenet': {
 #                'host': ['jubii.dk.quakenet.org',
