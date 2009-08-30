@@ -78,13 +78,23 @@ class Bot(irc.IRCClient):
         self.encoding = 'utf-8'
         self.split = split #Make the split function accessible to modules
         self.sourceURL = None #Disable source reply.
-        
+        self.lastmsg = time.mktime(time.gmtime())
+        t = threading.Thread(target=self.connectionWatcher)
+        t.start()
         
         self.loadModules()
         irc.IRCClient.connectionMade(self)
         self._print("Connected to %s:%s at %s" % (self.transport.connector.host, self.transport.connector.port, time.asctime(time.localtime(time.time()))))
 
-        
+    def connectionWatcher(self):
+        """Make sure that we are still connected by PINGing the server."""
+        while True:
+            #Send PING to the server If no data has been received for 200 seconds.
+            if (self.lastmsg+200) < time.mktime(time.gmtime()):
+                self.lastmsg = time.mktime(time.gmtime())
+                self.sendLine("PING YO!")
+            time.sleep(200)
+
     def loadModules(self):
         self._print("Loading modules...")
         self.modules = {} #Modules loaded from the modules directory.
@@ -302,6 +312,7 @@ class Bot(irc.IRCClient):
         self.transport.write("%s%s%s" % (line, chr(015), chr(012)))
 
     def lineReceived(self, line):
+        self.lastmsg = time.mktime(time.gmtime())
         line = lowDequote(line)
         try:
             line = line.decode('utf-8')
