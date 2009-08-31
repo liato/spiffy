@@ -49,9 +49,6 @@ if __name__ == '__main__':
                 port = 6667
                 if isinstance(server, (tuple, list)):
                     server = server[0]
-                    serverconfig['activeservernum'] = 0
-                else:
-                    serverconfig['activeservernum'] = -1
                 
                 ssl = False
                 if ':' in server:

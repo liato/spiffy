@@ -986,21 +986,24 @@ class BotFactory(protocol.ClientFactory):
             print >> output, prefix+text
 
     def clientConnectionLost(self, connector, reason):
-        """If we get disconnected, reconnect to server."""
+        """Attempt to connect to the next server or reconnect to the current
+        if we get disconnected."""
         self._print('Disconnected from %s (%s:%s).' % (self.config.get('network'), self.config['activeserver'][0], self.config['activeserver'][1]))
         if not self.config.get('reconnect') == False:
-            activeservernum = self.config.get('activeservernum', -1)
-            if activeservernum >= 0:
-                activeservernum += 1
-                if activeservernum > (len(self.config['host'])-1):
-                    activeservernum = 0
-                server = self.config['host'][activeservernum]
+            server = self.config.get('host')
+            if isinstance(server, (tuple, list)):
+                self.config['host'].append(self.config['host'].pop(0))
+                server = self.config['host'][0]
                 port = 6667
                 if ':' in server:
                     server, port = server.split(':')
+                    #TODO: Make it possible to reconnect to both SSL and regular servers.
+                    #Probably requires a new connector object.
+                    if port.startswith('+'):
+                        port = port[1:]
                     port = int(port)
+
                 self.config['activeserver'] = (server, port)
-                self.config['activeservernum'] = activeservernum
                 connector.host = server
                 connector.port = port
 
