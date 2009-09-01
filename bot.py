@@ -275,6 +275,7 @@ class Bot(irc.IRCClient):
         serverconfig['network'] = self.config['network']
         serverconfig['logevents'] = [s.upper() for s in serverconfig['logevents']]
         if not self.config['nick'] == serverconfig['nick']:
+            self.nickname = serverconfig['nick']
             self.sendLine('NICK %s' % serverconfig['nick'])
 
         self.username = self.config.get('user', self.nickname)
