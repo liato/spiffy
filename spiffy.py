@@ -4,10 +4,9 @@ import os
 import imp
 
 from twisted.internet import reactor
-from bot import BotFactory
+from bot import BotFactory, config_defaults
 
 connections = {}
-
 
 if __name__ == '__main__':
     if sys.version_info < (2, 5): 
@@ -24,13 +23,6 @@ if __name__ == '__main__':
     if hasattr(config, 'networks'):
         for network in config.networks:
             serverconfig = {}
-            config_defaults = {'nick': 'spiffy', 'prefix': r'!',
-                               'chandebug': True, 'channels': [],
-                                'logevents': ['PRIVMSG', 'JOIN', 'PART',
-                                              'MODE', 'TOPIC', 'KICK', 'QUIT',
-                                              'NOTICE', 'NICK', '332', '333'],
-                                'verbose': True, 'reconnect': 10,
-                                'logpath': 'logs'}
             for x in config_defaults:
                 serverconfig[x] = config_defaults[x]
             for x in config.__dict__:

@@ -32,6 +32,14 @@ try:
     import MySQLdb
 except ImportError:
     MySQLdb = None
+    
+config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
+                    'channels': [],
+                    'logevents': ['PRIVMSG', 'JOIN', 'PART',
+                                    'MODE', 'TOPIC', 'KICK', 'QUIT',
+                                    'NOTICE', 'NICK', '332', '333'],
+                    'verbose': True, 'reconnect': 10,
+                    'logpath': 'logs'}
 
 def parsemsg(s):
     """Breaks a message from an IRC server into its prefix, command, arguments and text.
@@ -238,6 +246,81 @@ class Bot(irc.IRCClient):
                         bind(self, regexp, func)
         
         return module
+
+    def rehash(self):
+        """Reload the config file and modules for this network.
+        If the current network has been removed or renamed only global settings
+        from the config file will be reloaded.
+        """
+
+        self._print('Reloading configuration...')
+        config_name = os.path.join(sys.path[0], 'config.py')
+        if not os.path.isfile(config_name):
+            self._print('Error: Unable to rehash, no config(.py) file found.', 'err')
+            return False
+    
+        config = imp.load_source('config', config_name)
+        config = config.__dict__
+        serverconfig = config_defaults.copy()
+        
+        for setting in config:
+            if not setting.startswith('__'):
+                serverconfig[setting] = config[setting]
+        
+        if 'networks' in config:
+            if self.config['network'] in config['networks']:
+                for setting in config['networks'][self.config['network']]:
+                    serverconfig[setting] = config['networks'][self.config['network']][setting]
+        serverconfig['activeserver'] = self.config['activeserver']
+        serverconfig['network'] = self.config['network']
+        serverconfig['logevents'] = [s.upper() for s in serverconfig['logevents']]
+        if not self.config['nick'] == serverconfig['nick']:
+            self.sendLine('NICK %s' % serverconfig['nick'])
+
+        self.username = self.config.get('user', self.nickname)
+        self.realname = self.config.get('name', self.nickname)
+        
+        oldmodules = self.modules.keys()
+        self.loadModules()
+        newmodules = self.modules.keys()
+        removed_modules = [x for x in oldmodules if x not in newmodules]
+        added_modules = [x for x in newmodules if x not in oldmodules]
+        
+        added_settings = [(x, serverconfig[x]) for x in serverconfig if not x in self.config]
+        removed_settings = [x for x in self.config if not x in serverconfig]
+        changed_settings = [(x, self.config[x], serverconfig[x]) for x in serverconfig if (x in self.config) and (not serverconfig.get(x) == self.config.get(x)) and (not x == 'networks')]
+        if added_settings:
+            self._print('Added %s new settings:' % len(added_settings))
+            for setting in added_settings:
+                self._print(" + '%s': %s" % setting)
+
+        if removed_settings:
+            self._print('Removed %s settings:' % len(removed_settings))
+            for setting in removed_settings:
+                self._print(" - '%s'" % setting)
+
+        if changed_settings:
+            self._print('Changed %s settings:' % len(changed_settings))
+            for setting in changed_settings:
+                self._print(" * '%s': %s -> %s" % setting)
+        
+        if added_modules:
+            self._print('Loaded %s new modules:' % len(added_modules))
+            self._print(", ".join(added_modules))
+
+        if removed_modules:
+            self._print('Removed %s modules:' % len(removed_modules))
+            self._print(", ".join(removed_modules))
+
+        self.config = serverconfig
+        return {'modules': {'removed': removed_modules,
+                            'added': added_modules
+                            },
+                'settings': {'removed': removed_settings,
+                             'added': added_settings,
+                             'changed': changed_settings
+                             }
+                }
         
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
