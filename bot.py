@@ -213,7 +213,7 @@ class Bot(irc.IRCClient):
                         if len(func.rule) == 2 and isinstance(func.rule[0], str): 
                             prefix, pattern = func.rule
                             prefix = sub(prefix)
-                            regexp = re.compile(prefix + pattern, re.IGNORECASE)
+                            regexp = re.compile(re.escape(prefix) + pattern, re.IGNORECASE)
                             bind(self, regexp, func)
                             createdoc(self, func)
          
@@ -224,7 +224,7 @@ class Bot(irc.IRCClient):
                             createdoc(self, func, commands)
                             for command in commands:
                                 command = r'(%s)(?: +(?:%s))?$' % (command, pattern)
-                                regexp = re.compile(prefix + command, re.IGNORECASE)
+                                regexp = re.compile(re.escape(prefix) + command, re.IGNORECASE)
                                 bind(self, regexp, func)
          
                         # 3) e.g. ('$nick', ['p', 'q'], '(.*)')
@@ -234,14 +234,14 @@ class Bot(irc.IRCClient):
                             createdoc(self, func, commands)
                             for command in commands: 
                                 command = r'(%s) +' % command
-                                regexp = re.compile(prefix + command + pattern, re.IGNORECASE)
+                                regexp = re.compile(re.escape(prefix) + command + pattern, re.IGNORECASE)
                                 bind(self, regexp, func)
        
                 if hasattr(func, 'commands'):
                     createdoc(self, func, func.commands)
                     for command in func.commands: 
                         template = r'^%s(%s)(?: +(.*))?$'
-                        pattern = template % (self.config['prefix'], command)
+                        pattern = template % (re.escape(self.config['prefix']), command)
                         regexp = re.compile(pattern, re.IGNORECASE)
                         bind(self, regexp, func)
         
