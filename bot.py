@@ -76,7 +76,12 @@ class Bot(irc.IRCClient):
         self.config = self.factory.config
         self.connections = self.factory.connections
         self.connections[self.config['network']] = self
-        self.nickname = self.config.get('nick', 'spiffy')
+        if isinstance(self.config['nick'], (list, tuple)):
+            self.nickname = self.config['nick'][0]
+            self.nickbucket = self.config['nick'][:]
+        else:
+            self.nickname = self.config['nick']
+            self.nickbucket = []
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
         self.me = '%s!%s@unknown' % (self.nickname, self.username)
@@ -234,7 +239,7 @@ class Bot(irc.IRCClient):
                             createdoc(self, func, commands)
                             for command in commands: 
                                 command = r'(%s) +' % command
-                                regexp = re.compile(re.escape(prefix) + command + pattern, re.IGNORECASE)
+                                regexp = re.compile(prefix + command + pattern, re.IGNORECASE)
                                 bind(self, regexp, func)
        
                 if hasattr(func, 'commands'):
@@ -274,9 +279,14 @@ class Bot(irc.IRCClient):
         serverconfig['activeserver'] = self.config['activeserver']
         serverconfig['network'] = self.config['network']
         serverconfig['logevents'] = [s.upper() for s in serverconfig['logevents']]
-        if not self.config['nick'] == serverconfig['nick']:
-            self.nickname = serverconfig['nick']
-            self.sendLine('NICK %s' % serverconfig['nick'])
+        if isinstance(serverconfig['nick'], (list, tuple)):
+            newnick = serverconfig['nick'][0]
+            self.nickbucket = serverconfig['nick'][:]
+        else:
+            newnick = serverconfig['nick']
+                                   
+        if not self.nickname == newnick:
+            self.setNick(newnick)
 
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
@@ -335,8 +345,8 @@ class Bot(irc.IRCClient):
         self.config['reconnect'] = 10
         self.transport.connector.connect()
 
-    def jump(self):
-        self.sendLine('QUIT :Changing servers')
+    def jump(self, msg='Changing servers'):
+        self.sendLine('QUIT :%s' % msg)
         
     def modeChanged(self, user, channel, set, modes, args):
         """Called when users or channel's modes are changed."""
@@ -372,6 +382,21 @@ class Bot(irc.IRCClient):
         channels = self.config.get('channels', [])
         for chan in channels:
             self.join(chan)
+
+    def irc_ERR_ERRONEUSNICKNAME(self, prefix, params):
+        """Called when we try to register an invalid nickname."""
+        self.irc_ERR_NICKNAMEINUSE(prefix, params)
+        
+    def irc_ERR_NICKNAMEINUSE(self, prefix, params):
+        """Called when we try to register an invalid nickname."""
+        if len(self.nickbucket) > 0:
+            newnick = self.nickbucket.pop(0)
+        else:
+            newnick = self.nickname+'_'
+        self._print('Error using %s as nickname. (%s)' % (params[1], params[2]))
+        self._print('Trying %s...' % newnick)
+        self.register(newnick)
+        
 
     def joined(self, channel):
         """This will get called when the bot joins the channel."""

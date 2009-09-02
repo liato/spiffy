@@ -8,7 +8,15 @@
 #                                                                    #
 #-#-#-#-#-#-#-#-#-#-#-#-#      GENERAL       #-#-#-#-#-#-#-#-#-#-#-#-#
 #                                                                    #
-# nick - The nickname to use when connecting to an IRC server
+# nick - The nickname and alternative nicknames to use when
+#        connecting to an IRC server
+#
+#    If nick is a list the first nickname in the list will be the
+#    primary nickname and the rest alternative nicknames.
+#
+#    Use 'spiffy' as your primary nickname and 'yffips' if someone
+#    else is already using 'spiffy' on the network:
+#        nick = ['spiffy', 'yffips']
 #
 #    The default nickname is 'spiffy'.
 #
@@ -41,7 +49,7 @@ password = None
 name = "spiffy - http://github.com/liato/spiffy"
 
 #
-# name - A list of channels to join.
+# channels - A list of channels to join.
 #
 #    Separate the channel key with a space.
 #
@@ -71,7 +79,7 @@ versionreply = "I'm spiffy!"
 #    'foo'  execute admin commands:
 #        ownermask = '.+!~?foo[^@]+'
 #
-#    To let anyone connection from sweden execute admin commands:
+#    To let anyone connecting from sweden execute admin commands:
 #        ownermask = r'\.se$'
 #
 #    If the ownermask is set to None no admin commands will execute:
