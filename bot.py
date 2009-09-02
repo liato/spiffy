@@ -78,7 +78,7 @@ class Bot(irc.IRCClient):
         self.connections[self.config['network']] = self
         if isinstance(self.config['nick'], (list, tuple)):
             self.nickname = self.config['nick'][0]
-            self.nickbucket = self.config['nick'][:]
+            self.nickbucket = self.config['nick'][1:]
         else:
             self.nickname = self.config['nick']
             self.nickbucket = []
@@ -111,6 +111,7 @@ class Bot(irc.IRCClient):
     def loadModules(self):
         self._print("Loading modules...")
         self.modules = {} #Modules loaded from the modules directory.
+        self.nickmodules = {} #Modules that have a <nick> trigger
         self.doc = {} #Documentation for modules.
         self.aliases = {} #Aliases for module commands.
         modules = []
@@ -132,7 +133,7 @@ class Bot(irc.IRCClient):
         else:
             self._print("Warning: Couldn't find any modules. Does /modules exist?", 'err')
 
-    def loadModule(self, filename):
+    def loadModule(self, filename, function = None):
 
         def bind(self, regexp, func): 
             if func.name in self.modules:
@@ -187,12 +188,8 @@ class Bot(irc.IRCClient):
             # These replacements have significant order
             pattern = pattern.replace('$nickname', self.nickname)
             return pattern.replace('$nick', r'%s[,:] +' % self.nickname)
-
-        name = os.path.basename(filename)[:-3]
-        module = imp.load_source(name, filename)
-        if hasattr(module, 'setup'): 
-           module.setup(self)
-        for name, func in vars(module).iteritems(): 
+            
+        def handlefunc(func):
             if hasattr(func, 'commands') or hasattr(func, 'rule'):
                 if not hasattr(func, 'name'): 
                     func.name = func.__name__
@@ -207,7 +204,8 @@ class Bot(irc.IRCClient):
        
                 if hasattr(func, 'rule'):
                     # 0) e.g. '(hi|hey) $nick'
-                    if isinstance(func.rule, str): 
+                    if isinstance(func.rule, str):
+                        self.nickmodules[func.name] = func
                         pattern = sub(func.rule)
                         regexp = re.compile(pattern)
                         bind(self, regexp, func)
@@ -215,7 +213,8 @@ class Bot(irc.IRCClient):
         
                     elif isinstance(func.rule, tuple): 
                         # 1) e.g. ('$nick', '(.*)')
-                        if len(func.rule) == 2 and isinstance(func.rule[0], str): 
+                        if len(func.rule) == 2 and isinstance(func.rule[0], str):
+                            self.nickmodules[func.name] = func
                             prefix, pattern = func.rule
                             prefix = sub(prefix)
                             regexp = re.compile(re.escape(prefix) + pattern, re.IGNORECASE)
@@ -233,7 +232,8 @@ class Bot(irc.IRCClient):
                                 bind(self, regexp, func)
          
                         # 3) e.g. ('$nick', ['p', 'q'], '(.*)')
-                        elif len(func.rule) == 3: 
+                        elif len(func.rule) == 3:
+                            self.nickmodules[func.name] = func
                             prefix, commands, pattern = func.rule
                             prefix = sub(prefix)
                             createdoc(self, func, commands)
@@ -249,8 +249,28 @@ class Bot(irc.IRCClient):
                         pattern = template % (re.escape(self.config['prefix']), command)
                         regexp = re.compile(pattern, re.IGNORECASE)
                         bind(self, regexp, func)
-        
-        return module
+        if not function:
+            name = os.path.basename(filename)[:-3]
+            module = imp.load_source(name, filename)
+            if hasattr(module, 'setup'): 
+               module.setup(self)
+            for name, func in vars(module).iteritems():
+                handlefunc(func)
+            return module
+        else:
+            handlefunc(function)
+            return function
+
+    def nickChanged(self, nick):
+        """Called when my nick has been changed.
+        """
+        self.nickname = nick
+        for func in self.nickmodules:
+            if func in self.modules:
+                del self.modules[func]
+            if func in self.doc:
+                del self.doc[func]
+            self.loadModule(filename=None, function = self.nickmodules[func])
 
     def rehash(self):
         """Reload the config file and modules for this network.
@@ -281,7 +301,7 @@ class Bot(irc.IRCClient):
         serverconfig['logevents'] = [s.upper() for s in serverconfig['logevents']]
         if isinstance(serverconfig['nick'], (list, tuple)):
             newnick = serverconfig['nick'][0]
-            self.nickbucket = serverconfig['nick'][:]
+            self.nickbucket = serverconfig['nick'][1:]
         else:
             newnick = serverconfig['nick']
                                    
@@ -395,6 +415,7 @@ class Bot(irc.IRCClient):
             newnick = self.nickname+'_'
         self._print('Error using %s as nickname. (%s)' % (params[1], params[2]))
         self._print('Trying %s...' % newnick)
+        self.nickChanged(newnick)
         self.register(newnick)
         
 
