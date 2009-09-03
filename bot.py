@@ -44,7 +44,8 @@ config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
                                     'MODE', 'TOPIC', 'KICK', 'QUIT',
                                     'NOTICE', 'NICK', '332', '333'],
                     'verbose': True, 'reconnect': 10,
-                    'logpath': 'logs'}
+                    'logpath': 'logs', 'modules_exclude': [],
+                    'modules_include': False}
 
 def parsemsg(s):
     """Breaks a message from an IRC server into its prefix, command, arguments and text.
@@ -122,21 +123,32 @@ class Bot(irc.IRCClient):
         modules = []
         if os.path.exists(os.path.join(sys.path[0], 'modules')):
             filenames = []
-            for fn in os.listdir(os.path.join(sys.path[0], 'modules')): 
-                if fn.endswith('.py') and not fn.startswith('_'): 
+
+            if isinstance(self.config['modules_include'], (list, tuple)):
+                for fn in self.config['modules_include']:
+                    if not "." in fn:
+                        fn = fn + ".py"
                     filenames.append(os.path.join(sys.path[0], 'modules', fn))
+            else:
+                for fn in os.listdir(os.path.join(sys.path[0], 'modules')): 
+                    if fn.endswith('.py') and not fn.startswith('_'):
+                        if not fn[:-3] in self.config['modules_exclude']:
+                            filenames.append(os.path.join(sys.path[0], 'modules', fn))
+
             for filename in filenames:
                 name = os.path.basename(filename)[:-3]
                 try:
                     self.loadModule(filename)
-                except Exception, e: 
-                    self._print("Error loading %s: %s (in bot.py)" % (name, e), 'err')
-                else:
                     modules.append(name)
+                except Exception, e:
+                    self._print("Error loading %s: %s (in bot.py)" % (name, e), 'err')
+
+
         if modules: 
-           self._print('Registered modules:', ', '.join(modules))
+           self._print('Registered modules: %s' % ', '.join(modules))
         else:
-            self._print("Warning: Couldn't find any modules. Does /modules exist?", 'err')
+            if not self.config['modules_include'] == []:
+                self._print("Warning: Couldn't find any modules. Does /modules exist?", 'err')
 
     def loadModule(self, filename, function = None):
 
@@ -317,16 +329,20 @@ class Bot(irc.IRCClient):
 
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
+
+        added_settings = [(x, serverconfig[x]) for x in serverconfig if not x in self.config]
+        removed_settings = [x for x in self.config if not x in serverconfig]
+        changed_settings = [(x, self.config[x], serverconfig[x]) for x in serverconfig if (x in self.config) and (not serverconfig.get(x) == self.config.get(x)) and (not x == 'networks')]
+
+        self.config = serverconfig
         
+
         oldmodules = self.modules.keys()
         self.loadModules()
         newmodules = self.modules.keys()
         removed_modules = [x for x in oldmodules if x not in newmodules]
         added_modules = [x for x in newmodules if x not in oldmodules]
         
-        added_settings = [(x, serverconfig[x]) for x in serverconfig if not x in self.config]
-        removed_settings = [x for x in self.config if not x in serverconfig]
-        changed_settings = [(x, self.config[x], serverconfig[x]) for x in serverconfig if (x in self.config) and (not serverconfig.get(x) == self.config.get(x)) and (not x == 'networks')]
         if added_settings:
             self._print('Added %s new settings:' % len(added_settings))
             for setting in added_settings:
@@ -350,7 +366,6 @@ class Bot(irc.IRCClient):
             self._print('Removed %s modules:' % len(removed_modules))
             self._print(", ".join(removed_modules))
 
-        self.config = serverconfig
         return {'modules': {'removed': removed_modules,
                             'added': added_modules
                             },
