@@ -1,3 +1,6 @@
+# this will probably raise an exception in Python >= 2.6
+from __future__ import with_statement
+
 import codecs
 import datetime
 import hashlib
@@ -32,6 +35,8 @@ try:
     import MySQLdb
 except ImportError:
     MySQLdb = None
+
+
     
 config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
                     'channels': [],
@@ -143,7 +148,9 @@ class Bot(irc.IRCClient):
 
         def createdoc(self, func, commands = None):
             pcmd = self.config["prefix"] + func.name # pcmd = prefixed command
-            commands = commands[:]
+            
+            if commands:
+                commands = commands[:]
 
             if func.__doc__:
                 doc = func.__doc__
@@ -174,7 +181,7 @@ class Bot(irc.IRCClient):
 
             for command in commands or []:
                 self.aliases[command.lower()] = func.name
-            if func.name in commands:
+            if func.name in (commands or []):
                 commands.remove(func.name)
             if commands:
                 aliases = "\x02Aliases for the %s command:\x02\n  " % func.name
