@@ -1,4 +1,3 @@
-from optparse import OptionParser
 import re
 import urllib2
 
@@ -53,15 +52,15 @@ def wolframalpha(self, input):
     baseurl = "http://www88.wolframalpha.com/input/"
     cmd = input.group(2) or ""
 
-    parser = OptionParser()
+    parser = self.OptionParser()
     parser.add_option("-d", "-r", "--results", dest="results", default="4")
     (options, args) = parser.parse_args(cmd.split())
 
     if not args:
-        raise self.BadInputError()
+        raise self.BadInputError("A query is required.")
 
     if not (options.results.lower() in ('a', 'all') or isposint(options.results)):
-        raise self.BadInputError()
+        raise self.BadInputError("Invalid results argument, should be 'all' or numeric.")
     
     query = " ".join(args)
     results = options.results

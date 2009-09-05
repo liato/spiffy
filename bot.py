@@ -5,6 +5,7 @@ import codecs
 import datetime
 import hashlib
 import imp
+import optparse
 import os
 import re
 import sqlite3
@@ -74,8 +75,10 @@ def sourcesplit(source):
 class Bot(irc.IRCClient):
     
     class BadInputError(Exception):
+        def __init__(self, value=None):
+            self.value = value
         def __str__(self):
-            return repr(self)
+            return repr(self.value)
 
     def connectionMade(self):
         self._print = self.factory._print
@@ -515,7 +518,7 @@ class Bot(irc.IRCClient):
 
                 match = regexp.match(text)
                 if match:
-                    input = CommandInput(self, prefix, command, params, text, match, line)
+                    input = CommandInput(self, prefix, command, params, text, match, line, func.name)
                     bot = QuickReplyWrapper(self, input)
                     targs = (func, bot, input)
                     t = threading.Thread(target=self.runModule, args=targs)
@@ -527,6 +530,8 @@ class Bot(irc.IRCClient):
             func(bot, input)
         except self.BadInputError, e:
             if input.sender:
+                if e.value:
+                    self.msg(input.sender, "\x02Error:\x02 %s" % e.value)
                 if self.doc[func.__name__][1]:
                     self.msg(input.sender, self.doc[func.__name__][1])
                 else:
@@ -560,9 +565,10 @@ class Bot(irc.IRCClient):
 
 class CommandInput(object):
 
-    def __init__(self, bot, source, command, params, text, match, line):
+    def __init__(self, bot, source, command, params, text, match, line, funcname):
         self.nick, self.user, self.host = sourcesplit(source or '')
         self.line = line
+        self.funcname = funcname
         self.command = command
         self.match = match
         self.group = match.group
@@ -612,8 +618,31 @@ class QuickReplyWrapper(object):
     def say(self, msg):
         if self.input.sender:
             self.bot.msg(self.input.sender, msg)
+            
+    def OptionParser(self):
+        return self.ModOptionParser(self.bot, self.input)
+        
+    class ModOptionParser(optparse.OptionParser):
+        def __init__(self, bot, input):
+            self.bot = bot
+            self.input = input
+            optparse.OptionParser.__init__(self, add_help_option=False)
+            self.add_option("-h", "--help", action="callback", callback=self.help_printer)
 
-
+        def error(self, msg):
+            raise self.bot.BadInputError(msg)
+            
+        def help_printer(self, option, opt, value, parser):
+            if self.input.funcname in self.bot.aliases:
+                cmd = self.bot.aliases[self.input.funcname]
+                for e in self.bot.doc[cmd]:
+                    if e:
+                        self.bot.msg(self.input.sender, e)
+            else:
+                self.say("Sorry, no help available for this command.")
+            sys.exit()
+                
+                
 class ChanList(object):
 
     def __init__(self, bot):
