@@ -246,7 +246,8 @@ class Bot(irc.IRCClient):
        
                 if hasattr(func, 'rule'):
                     if isinstance(func.rule, str):
-                        self.nickmodules[func.name] = func
+                        if '$nick' in func.rule:
+                            self.nickmodules[func.name] = func
                         pattern = func.rule.replace('$nickname', self.nickname).replace('$nick', self.nickname)
                         regexp = re.compile(pattern)
                         bind(self, regexp, func)
