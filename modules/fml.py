@@ -1,7 +1,6 @@
-#!/usr/bin/env python
-
+import re
+import urllib
 from xml.dom import minidom
-import re, urllib
 
 def fml(self, input): 
    """Fetches a random entry from FMyLife.com."""
@@ -10,6 +9,5 @@ def fml(self, input):
    xmllist = xmldoc.getElementsByTagName("text")
    self.say(xmllist[0].childNodes[0].data)
       
-fml.commands = ['fml']
+fml.rule = ['fml']
 fml.usage = [("Fetch a random entry", "$pcmd")]
-fml.thread = True

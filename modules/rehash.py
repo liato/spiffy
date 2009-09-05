@@ -6,7 +6,7 @@ def rehash(self, input):
 
     s = lambda x: '' if len(x) == 1 else 's'
 
-    if input.group(2) == '-v':
+    if input.args == '-v':
         verbose = True
     else:
         verbose = False
@@ -43,6 +43,6 @@ def rehash(self, input):
 
     self.say('Configuration successfully reloaded!')
         
-rehash.rule = ('$nick', ['rehash'], r'(\S+)?')
+rehash.rule = ['rehash']
 rehash.usage = [("Reload the configuration and all modules", "$nick $cmd"),
     ("Verbose version of the command above", "$nick $cmd -v")]

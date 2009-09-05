@@ -48,28 +48,37 @@ config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
                     'logpath': 'logs', 'modules_exclude': [],
                     'modules_include': False}
 
-def parsemsg(s):
-    """Breaks a message from an IRC server into its prefix, command, arguments and text.
-    """
-    prefix = None
-    text = None
-    if not s:
-        raise irc.IRCBadMessage("Empty line.")
-    if s[0] == ':':
-        prefix, s = s[1:].split(' ', 1)
-    if s.find(' :') != -1:
-        s, text = s.split(' :', 1)
-
-    args = s.split()
-    command = args.pop(0)
-    return prefix, command, args, text
-
-
 def sourcesplit(source):
     """Split nick!user@host and return a 3-value tuple."""
     r = re.compile(r'([^!]*)!?([^@]*)@?(.*)')
     m = r.match(source)
     return m.groups()
+
+def toUnicode(line, enc=None):
+    if isinstance(line, str):
+        done = False
+        if isinstance(enc, str):
+            try:
+                line = line.decode(enc)
+                done = True
+            except:
+                pass
+        if not done:            
+            try:
+                line = line.decode('utf-8')
+            except UnicodeDecodeError: 
+                try:
+                    line = line.decode('iso-8859-1')
+                except UnicodeDecodeError: 
+                    try:
+                        line = line.decode('cp1252')
+                    except UnicodeDecodeError:
+                        line = line.decode('utf-8', 'ignore')
+    elif isinstance(line, unicode):
+        pass
+    else:
+        line = repr(line)
+    return line
 
 
 class Bot(irc.IRCClient):
@@ -107,6 +116,22 @@ class Bot(irc.IRCClient):
         self.loadModules()
         irc.IRCClient.connectionMade(self)
         self._print("Connected to %s:%s at %s" % (self.transport.connector.host, self.transport.connector.port, time.asctime(time.localtime(time.time()))))
+
+    def parsemsg(self, s):
+        """Breaks a message from an IRC server into its prefix, command, arguments and text.
+        """
+        prefix = None
+        text = None
+        if not s:
+            raise irc.IRCBadMessage("Empty line.")
+        if s[0] == ':':
+            prefix, s = s[1:].split(' ', 1)
+        if s.find(' :') != -1:
+            s, text = s.split(' :', 1)
+    
+        args = s.split()
+        command = args.pop(0)
+        return prefix, command, args, text
 
     def connectionWatcher(self):
         """Make sure that we are still connected by PINGing the server."""
@@ -205,12 +230,7 @@ class Bot(irc.IRCClient):
                 aliases = None
             
             self.doc[func.name] = (doc, usage, example, aliases)            
-  
-        def sub(pattern, self=self): 
-            # These replacements have significant order
-            pattern = pattern.replace('$nickname', self.nickname)
-            return pattern.replace('$nick', r'%s[,:] +' % self.nickname)
-            
+
         def handlefunc(func):
             if hasattr(func, 'commands') or hasattr(func, 'rule'):
                 if not hasattr(func, 'name'): 
@@ -225,52 +245,22 @@ class Bot(irc.IRCClient):
                     func.event = func.event.upper()
        
                 if hasattr(func, 'rule'):
-                    # 0) e.g. '(hi|hey) $nick'
                     if isinstance(func.rule, str):
                         self.nickmodules[func.name] = func
-                        pattern = sub(func.rule)
+                        pattern = func.rule.replace('$nickname', self.nickname).replace('$nick', self.nickname)
                         regexp = re.compile(pattern)
                         bind(self, regexp, func)
                         createdoc(self, func)
         
-                    elif isinstance(func.rule, tuple): 
-                        # 1) e.g. ('$nick', '(.*)')
-                        if len(func.rule) == 2 and isinstance(func.rule[0], str):
-                            self.nickmodules[func.name] = func
-                            prefix, pattern = func.rule
-                            prefix = sub(prefix)
-                            regexp = re.compile(re.escape(prefix) + pattern, re.IGNORECASE)
+                    elif isinstance(func.rule, (tuple, list)): 
+                        prefix = self.config['prefix']
+                        commands = func.rule
+                        createdoc(self, func, commands)
+                        for command in commands:
+                            command = r'(?P<command>%s)(?:\s+(?P<args>.*))?$' % command
+                            regexp = re.compile(re.escape(prefix) + command, re.IGNORECASE)
                             bind(self, regexp, func)
-                            createdoc(self, func)
          
-                        # 2) e.g. (['p', 'q'], '(.*)')
-                        elif len(func.rule) == 2 and isinstance(func.rule[0], list): 
-                            prefix = self.config['prefix']
-                            commands, pattern = func.rule
-                            createdoc(self, func, commands)
-                            for command in commands:
-                                command = r'(%s)(?: +(?:%s))?$' % (command, pattern)
-                                regexp = re.compile(re.escape(prefix) + command, re.IGNORECASE)
-                                bind(self, regexp, func)
-         
-                        # 3) e.g. ('$nick', ['p', 'q'], '(.*)')
-                        elif len(func.rule) == 3:
-                            self.nickmodules[func.name] = func
-                            prefix, commands, pattern = func.rule
-                            prefix = sub(prefix)
-                            createdoc(self, func, commands)
-                            for command in commands: 
-                                command = r'(%s) +' % command
-                                regexp = re.compile(prefix + command + pattern, re.IGNORECASE)
-                                bind(self, regexp, func)
-       
-                if hasattr(func, 'commands'):
-                    createdoc(self, func, func.commands)
-                    for command in func.commands: 
-                        template = r'^%s(%s)(?: +(.*))?$'
-                        pattern = template % (re.escape(self.config['prefix']), command)
-                        regexp = re.compile(pattern, re.IGNORECASE)
-                        bind(self, regexp, func)
         if not function:
             name = os.path.basename(filename)[:-3]
             module = imp.load_source(name, filename)
@@ -452,7 +442,7 @@ class Bot(irc.IRCClient):
 
         # "It's easier to ask forgiveness than it is to get permission"
         # ...meaning that we force the message into a string!
-        message = str(message)
+        message = toUnicode(message)
 
         lines = message.split("\n")
         for line in lines:
@@ -460,6 +450,7 @@ class Bot(irc.IRCClient):
             self.sendLine("PRIVMSG %s :%s" % (receiver, line))
 
     def notice(self, receiver, message):
+        message = toUnicode(message)
         lines = message.split("\n")
         for line in lines:
             self.logger.log(self.me, 'NOTICE', [receiver], line)
@@ -474,19 +465,9 @@ class Bot(irc.IRCClient):
     def lineReceived(self, line):
         self.lastmsg = time.mktime(time.gmtime())
         line = lowDequote(line)
+        line = toUnicode(line)
         try:
-            line = line.decode('utf-8')
-        except UnicodeDecodeError: 
-            try:
-                line = line.decode('iso-8859-1')
-            except UnicodeDecodeError: 
-                try:
-                    line = line.decode('cp1252')
-                except UnicodeDecodeError:
-                    line = line.decode('utf-8', 'ignore')
-
-        try:
-            prefix, command, params, text = parsemsg(line)
+            prefix, command, params, text = self.parsemsg(line)
             if numeric_to_symbolic.has_key(command):
                 command = numeric_to_symbolic[command]
             self.handleCommand(command, prefix, params, text, line)
@@ -570,15 +551,15 @@ class Bot(irc.IRCClient):
 
 class CommandInput(object):
 
-    def __init__(self, bot, source, command, params, text, match, line, funcname):
+    def __init__(self, bot, source, event, params, text, match, line, funcname):
         self.nick, self.user, self.host = sourcesplit(source or '')
         self.line = line
         self.funcname = funcname
-        self.command = command
+        self.event = event
         self.match = match
         self.group = match.group
         self.groups = match.groups
-        self.args = params
+        self.params = params
         if len(params) > 0: 
             self.sender = params[0]
         else:
@@ -588,6 +569,11 @@ class CommandInput(object):
         self.sender = mappings.get(self.sender, self.sender)
         self.channel = self.sender
         self._bot = bot
+        if 'command' in match.groupdict() and 'args' in match.groupdict():
+            self.command = match.group('command')
+            self.args = match.group('args')
+        else:
+            self.command = self.args = match.group(0)
         
     def isowner(self, *args):
         if not 'ownermask' in self._bot.config:
@@ -1203,5 +1189,5 @@ class BotFactory(protocol.ClientFactory):
             connector.connect()
 
     def clientConnectionFailed(self, connector, reason):
-        self.clientConnectionLost(connector, reasoon)
+        self.clientConnectionLost(connector, reason)
         

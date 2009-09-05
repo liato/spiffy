@@ -1,12 +1,12 @@
-import re
 import random
+import re
 
 greetings = ["hi","hey","yo","sup","zup","hello","ey","eyy", "what up"]
 addons = ["sup?", "what's the happy hap?", "what's new?", "how's it hangin'?"]
 endings = [" :D", "!", "...", " lol!"]
 
 def hi(self, input):
-    cmd = input.group()
+    cmd = input.args
     greetreg = "(?:" + "|".join(greetings) + ")"
 
     # something like "<nick>, zup?"

@@ -290,7 +290,7 @@ class imdblib(object):
 
 def imdb(self, input):
     """Get information about a movie, tv show or actor."""
-    cmd = input.group(2)
+    cmd = input.args
     
     parser = self.OptionParser()
     parser.add_option("-r", "--rating", dest="rating", action="store_true", default=False)
@@ -375,7 +375,7 @@ def imdb(self, input):
                 if movie.usercomment: self.say("\x02User comments:\x02 %s" % movie.usercomment)
                 if movie.cast: self.say("\x02Cast:\x02 %s" % ", ".join([name+" as "+cname for id, name, cname in movie.cast[:5]]))
 
-imdb.rule = (["mdb", "imdb"], r"(.*)")
+imdb.rule = ["mdb", "imdb"]
 imdb.usage = [("Display information about a movie or tv show", "$pcmd <title>"),
     ("Display information about an actor", "$pcmd -p <name>"),
     ("Only show the title and rating for a list of movies", "$pcmd -r <title>[, <title>[, <title>...]]")]

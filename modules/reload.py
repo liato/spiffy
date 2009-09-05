@@ -9,7 +9,7 @@ def reload(self, input):
         self.say('This command is for admins only.')
         return
 
-    name = input.group(2)
+    name = input.args
     if (not name) or (name == '*'): 
         self.loadModules()
         self.say('All modules reloaded.')
@@ -17,7 +17,7 @@ def reload(self, input):
 
     try:
         module = self.loadModule(os.path.join('modules', name + '.py'))
-    except IOError, e:
+    except (IOError, ImportError), e:
         self.say('\x02Error:\x02 %s' % e)
         return
 
@@ -28,7 +28,7 @@ def reload(self, input):
         modified = 'unknown'
     self.reply('%r (version: %s)' % (module, modified))
 
-reload.rule = ('$nick', ['reload'], r'(\S+)?')
+reload.rule = ['reload']
 reload.usage = [("Reload a module from the modules directory", "$nick $cmd <module>"),
     ("Reload all modules from the modules directory", "$nick $cmd *")]
 reload.example = [("Reload the imdb module","$nick $cmd imdb")]

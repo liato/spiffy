@@ -1,19 +1,18 @@
-#coding: latin
+# -*- coding: latin-1 -*-
+import datetime
 import re
+import time
 import urllib
 import urllib2
-import time
-import datetime
-from pytz import timezone
+
 from decode import htmldecode
+from pytz import timezone
 
 
 def sl(self, input):
     """Queries sl.se for train/bus times"""
     
-    cmd = input.group(0).split(" ")
-    cmd = " ".join(cmd[1:])
-    cmd = cmd.decode("utf-8")
+    cmd = input.args
     
     m = re.search(r'(?P<later>sen|tidig)(?:are)?|(?P<start>[^,]+),\s*(?P<stop>[^,]+)(?:,\s*?(?:(?P<date>\d{4}-\d{2}-\d{2} [012]?[0-9][.:]?[0-5][0-9])|(?P<time>[01-2]?[0-9][.:]?[0-5][0-9])))?', cmd, re.I)
     if not m:
@@ -154,11 +153,9 @@ def sl(self, input):
     self.say(b2)# "du är framme...."
     self.say(foot) # "restid xx minuter"
     
-sl.rule = (["sl"], r"(.*)")
+sl.rule = ["sl"]
 sl.usage = [("Find out when and how to travel between two stations", "$pcmd <from>, <to>"),
             ("Perform a query and specify when you want to arrive", "$pcmd <from>, <to>, [YYYY-MM-DD] HH:MM"),
             ("After having performed a query, find out when the next departure is", "$pcmd sen")]
 sl.example = [("Find out how to go from T-Centralen to Medborgarplatsen", "$pcmd T-Centralen, Medborgarplatsen"),
               ("Find out when your train leaves tomorrow morning, if you want to arrive at 08:00", "$pcmd T-Centralen, Slussen, 08:00")]
-
-sl.thread = True

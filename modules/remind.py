@@ -140,9 +140,9 @@ message.rule = r'(.*)'
 def tell(self,input):
     "Delivers a message to a recipient the next time he or she says something."
     teller = input.nick
-    
-    verb, tellee, msg = input.groups()
-    verb = verb.encode('utf-8') # not used, but whatevs
+
+    m = re.search(r'([\S,]+) (.+)', input.args, re.I)
+    tellee, msg = input.groups()
     tellee = tellee.encode('utf-8')
     msg = msg.encode('utf-8')
     
@@ -168,7 +168,7 @@ def tell(self,input):
         
     self.say("%s: I'll pass that along!" % teller)
     
-tell.rule = ('$nick', ['tell', 'ask'], r'([\S,]+) (.+)')
+tell.rule = ['tell', 'ask']
 tell.usage = [("Give someone a message the next time they say something", "$nick, tell <recipient> <message>")]
 tell.example = [("Deliver a message to Joe when he shows up", "$nick, tell joe What's up?")]
 
@@ -179,7 +179,7 @@ def humantime(seconds,style='tuple'):
     d,h = divmod(h, 24)
     w,d = divmod(d, 7)
     if style == 'string':
-        return (w and str(w)+"w " or "")+(d and str(d)+"d " or "")+(h and str(h)+"h " or "")+(m and str(m)+"m " or "")+(s and str(s)+"s" or "").strip()
+        return ((w and str(w)+"w " or "")+(d and str(d)+"d " or "")+(h and str(h)+"h " or "")+(m and str(m)+"m " or "")+(s and str(s)+"s" or "")).strip()
     else:
         return (w,d,h,m,s)
 
@@ -237,30 +237,30 @@ def tryremind(self,id,sender,receiver,message,time,chan):
             self.bot.tells[receiver] = [(id,sender,receiver,message,time)]
 
 
-def remind(self,input):
+def remind(self, input):
     "Delivers a message at a specific time, either relative or absolute."
     i = 0
     use_in = None
-    if re.search(r" in (\d{1,} ?d(?:ay)?s?)? ?(-?\d{1,} ?h(?:our)?s?)? ?(-?\d{1,} ?m(?:inute|in)?s?)? ?(-?\d{1,} ?s(?:econd|ec)?s?)?",input.group()):
+    if re.search(r" in (\d{1,} ?d(?:ay)?s?)? ?(-?\d{1,} ?h(?:our)?s?)? ?(-?\d{1,} ?m(?:inute|in)?s?)? ?(-?\d{1,} ?s(?:econd|ec)?s?)?",input.args):
         # we have "remind someone blabla in 3d 1h 1m 3s"
-        i = input.group().rindex(" in")
+        i = input.args.rindex(" in")
         use_in = True
-    elif re.search(r" at (?:(20[0-9]{2})[- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01]) ([01]?\d|2[0-3])[:.]?([0-5]\d)|(2[0-3]|[01]?\d)[:.]?([0-5]\d))", input.group()):
+    elif re.search(r" at (?:(20[0-9]{2})[- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01]) ([01]?\d|2[0-3])[:.]?([0-5]\d)|(2[0-3]|[01]?\d)[:.]?([0-5]\d))", input.args):
         # we have "remind someone blabla at 2009-09-09 20:30 (or just 20:30)"
-        i = input.group().rindex(" at")
+        i = input.args.rindex(" at")
         use_in = False
     else:
         self.say(usage)
         return
     
     try:
-        nick = input.group().split()[2]
+        nick = input.args.split()[1]
         reqnick = input.nick
-        task = unicode(input.group()[input.group().index(nick)+len(nick)+1:i])
-        rtime = input.group()[i+4:]
+        task = unicode(input.args[input.args.index(nick)+len(nick)+1:i])
+        rtime = input.args[i+4:]
     except ValueError,IndexError:
-        self.say(usage)
-        return
+        raise self.BadInputError()
+
     if nick == "me":
         nick = input.nick
 
@@ -311,7 +311,7 @@ def remind(self,input):
     t = Timer(seconds, lambda: tryremind(self,id,reqnick,nick,task,now,input.sender))
     t.start()
         
-remind.rule = ("$nick",["remind"],r".*")
+remind.rule = ["remind"]
 
 remind.usage = [("Add a reminder to be delivered at a specific time", "$nick, remind <recipient> <message> at <[date]time>"),
               ("Add a reminder to be delivered in a certain amount of time", "$nick, remind <recipient> <message> in <time>")]

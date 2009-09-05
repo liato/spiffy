@@ -2,7 +2,7 @@ import re
 
 def alc(self,input):
     """Calculates the amount of alcohol in a drink. Units used are cl and percent."""
-    g = re.findall("[0-9+*\-\^/.,]+ [0-9+*\-\^/.,]+",input.groups()[1])
+    g = re.findall("[0-9+*\-\^/.,]+ [0-9+*\-\^/.,]+",input.args)
 
     if not g:
         raise self.BadInputError()
@@ -40,7 +40,7 @@ def alc(self,input):
                                                                           7.89*total,
                                                                           b))        
 
-alc.rule = (["alc"],r"(.+)")
+alc.rule = ["alc"]
 alc.usage = [("Calculate the amount of pure alcohol in a drink, given amount (cl) and percent alcohol by volume",
               "$pcmd <amount> <percentage>"),
              ("Calculate for several drinks at once", "$pcmd <amt1> <per1> <amt2> <per2> [....]")]

@@ -10,7 +10,7 @@ def fdur(t):
 def dl(self, input):
     """Calculates how long a download will take, given file size and speed."""
 
-    m = re.search(r"(?P<size>\d{1,}) ?(?P<sizesuf>(?:k|m|g|t|e|z|y)i?)?b?\s(?P<speed>\d{1,}) ?(?P<speedsuf>(?:k|m|g|t|e|z|y)i?)?b?",input.group(0),re.IGNORECASE)
+    m = re.search(r"(?P<size>\d{1,}) ?(?P<sizesuf>(?:k|m|g|t|e|z|y)i?)?b?\s(?P<speed>\d{1,}) ?(?P<speedsuf>(?:k|m|g|t|e|z|y)i?)?b?", input.args, re.IGNORECASE)
     
     if not m:
         raise self.BadInputError()
@@ -49,10 +49,9 @@ def dl(self, input):
     self.say(caltime)
 
 
-dl.rule = (["dl","dload"], r".*")
+dl.rule = ["dl","dload"]
 dl.usage = [("Calculate the estimated time to download a file using default units",
              "$pcmd <size (MiB)> <speed (kiB/s)>"),
             ("Calculate using other units", "$pcmd <size> <kb|mb|gb|tb|...> <speed> <kb|mb|gb|tb|...>/s")]
 dl.example = [("Calculate how long it takes to download a DVD image at modem speeds", "$pcmd 4.4 gb 6 kb/s")]          
-dl.thread = True
 

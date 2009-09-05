@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from optparse import OptionParser
 from decode import htmldecode
 
 import datetime
@@ -131,7 +130,7 @@ def rss(self, input):
     """Checks RSS feeds periodically and notifies the channel when a new post is added."""
     
     if not input.sender.startswith('#'): return
-    cmd = input.group(2) or ""
+    cmd = input.args or ""
 
     parser = self.OptionParser()
     parser.add_option("-r", "--remove", dest="remove")
@@ -204,7 +203,7 @@ def rss(self, input):
         self.say("Added!")
 
 
-rss.rule = (["rss"], r"(.*)")
+rss.rule = ["rss"]
 rss.usage = [("Add a new feed","$pcmd <url>"),
              ("Remove feeds whose URLs contain pattern", "$pcmd -r <pattern"),
              ("Check feeds whose URLs contain patter", "$pcmd -c <pattern>"),
@@ -213,6 +212,5 @@ rss.usage = [("Add a new feed","$pcmd <url>"),
              ("Check the last num entries from a particular feed", "$pcmd -d<num> <pattern>")]
 rss.example = [("Check all added Reddit feeds, if any exist", "$pcmd -c reddit"),
                ("View the last 3 entries from Reddit", "$pcmd -d3 reddit")]
-rss.thread = True
 
 

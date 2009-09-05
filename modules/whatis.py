@@ -1,4 +1,5 @@
 import re
+import urllib
 import urllib2
 
 qurl = "http://www.google.com/search?q=%s&hl=en"
@@ -8,7 +9,10 @@ def whatis(self, input):
 
     msg = lambda message: self.say(message)
     
-    query = input.groups()[1].strip()
+    if not input.args:
+        raise self.BadInputError()
+
+    query = input.args.strip()
 
     showurl = False
     if "-u " in query:
@@ -29,7 +33,6 @@ def whatis(self, input):
     gsays = chr(2) + "Google says: " + chr(2)
 
     match = re.search(r"<td nowrap[^>]*><h2 class=r [^>]+><b>(.+?)</b>", page,re.IGNORECASE)
-    print match
     if match:
         result = match.group(1).strip().replace("&quot;","\"")
         result = re.sub(r"<[^>]+?>","",result)
@@ -37,7 +40,7 @@ def whatis(self, input):
         return
     del match
     
-    match = re.search(r"Web definitions for <b>.+?<td valign=top>([^<]+)<br>", page)
+    match = re.search("Web definitions for <b>.+?<td valign=to[^>]+>([^<]+)<br>", page)
     if match:
         msg(gsays+match.group(1).strip().replace("&quot;","\""))
         return
@@ -54,12 +57,8 @@ def whatis(self, input):
 
     msg("Google knows not!")
 
-whatis.rule = (["whatis", "w"], "(.+)")
+whatis.rule = ["whatis", "w"]
 whatis.usage = [("Use Google Calculator to convert between currencies", "$pcmd <amount> <currency> in <amount> <currency>"),
                 ("Show the URL to the result page together with the result", "$pcmd -u <query>")]
 whatis.example = [("Convert 100 USD to EUR", "$pcmd 100 usd in eur"),
                   ("Convert miles per hour to meters per second", "$pcmd 1 mph in meters per second")]
-whatis.priority = 'high'
-
-if __name__ == '__main__': 
-   print __doc__.strip()

@@ -50,7 +50,7 @@ def center(s, l):
 def wolframalpha(self, input):
     """Query wolframalpha.com for information about anything."""
     baseurl = "http://www88.wolframalpha.com/input/"
-    cmd = input.group(2) or ""
+    cmd = input.args or ""
 
     parser = self.OptionParser()
     parser.add_option("-d", "-r", "--results", dest="results", default="4")
@@ -112,7 +112,7 @@ def wolframalpha(self, input):
                     self.say("\x02")
 
 
-wolframalpha.rule = (["wa", "wolframalpha"], r"(.*)")
+wolframalpha.rule = ["wa", "wolframalpha"]
 wolframalpha.usage = [("Query wolframalpha for information about anything", "$pcmd <query>"),
     ("Display <num> number of 'pods' for the given query", "$pcmd -d <num> <query>"),
     ("Display all 'pods' for the given query", "$pcmd -d all <query>")]

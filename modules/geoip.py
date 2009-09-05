@@ -5,10 +5,10 @@ words = dict(hostname="Hostname", country="Country", region_name="Region",
 
 def geoip(self, input):
     "Geographical information about an IP/host"
-    if not input.group(2):
+    if not input.args:
         raise self.BadInputError()
 
-    host = input.group(2)
+    host = input.args
     host = urllib.quote(host.encode('utf-8'))
 
     try:
@@ -31,6 +31,6 @@ def geoip(self, input):
         output += "\x02GMaps:\x02 "+"http://maps.google.com/maps?q="+m["latitude"]+","+m["longitude"]
     self.say(output.strip())
 
-geoip.rule = (["geo", "geoip"], r"(.*)")
+geoip.rule = ["geo", "geoip"]
 geoip.usage = [("Get information about where an IP/host is geographically located", "$pcmd <ip|host>")]
 geoip.usage = [("Get information about where google.com is geographically located", "$pcmd google.com")]
