@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from optparse import OptionParser
+from decode import htmldecode
+
 import datetime
 import hashlib
 import os
@@ -42,6 +44,24 @@ class RSS:
         self.lastvalue = hashlib.sha224(str(entries[0])).hexdigest()
         return newentries
 
+    def getentries(self, num):
+        "Get the num last entries"
+        
+        data = None
+        try:
+            data = feedparser.parse(self.url)
+        except Exception, e:
+            return None
+
+        if not data:
+            return None
+        
+        entries = data['entries']
+        if not entries:
+            return None
+
+        return entries[:num]
+
 
 def setup(self): 
     self.rss_filename = os.path.join("data", 'rss.db')
@@ -57,7 +77,7 @@ def setup(self):
     if not self.rss_db:
         self.rss_db = []
 
-    t = threading.Timer(300, checksites, args=(self, None))
+    t = threading.Timer(300, checksites, args=(self, None, savedb))
     t.start()
    
     
@@ -79,7 +99,7 @@ def rh(s):
     s = re.sub(" +"," ",s)
     return s
 
-def checksites(self, pattern=None):
+def checksites(self, pattern=None, savefunc=None):
     for site in self.rss_db:
         if (pattern or "") in site.url:
             try:
@@ -96,10 +116,14 @@ def checksites(self, pattern=None):
                         
             except Exception, e:
                 self.sendLine("PRIVMSG " + site.chan + " :\x02RSS:\x02 Error while checking %s. (%s)!" % (site.url, e))
-            
-    savedb(self.rss_filename, self.rss_db)
+                
+    if not savefunc:        
+        savedb(self.rss_filename, self.rss_db)
+    else:
+        savefunc(self.rss_filename, self.rss_db)
+        
     if not pattern:
-        t = threading.Timer(900, checksites, args=(self,None))
+        t = threading.Timer(900, checksites, args=(self,None,savedb))
         t.start()
     
 
@@ -109,17 +133,13 @@ def rss(self, input):
     if not input.sender.startswith('#'): return
     cmd = input.group(2) or ""
 
-    parser = OptionParserMod() # defined at the end of the file
+    parser = self.OptionParser()
     parser.add_option("-r", "--remove", dest="remove")
     parser.add_option("-c", "--check", dest="check")
     parser.add_option("-l", "--list", dest="list", action="store_true")
-    parser.add_option("-d", "--display", dest="display")
+    parser.add_option("-d", "--display", dest="display", type="int")
 
-    try:
-        options, args = parser.parse_args(cmd.split())
-    except ValueError:
-        raise self.BadInputError()
-        return
+    options, args = parser.parse_args(cmd.split())
 
     if options.remove:
         for site in self.rss_db:
@@ -129,21 +149,21 @@ def rss(self, input):
         savedb(self.rss_filename, self.rss_db)
         
     elif options.display:
+        if not args:
+            self.say("\x02Error:\x02 A pattern must be provided when using switch -d")
+            return
+        
         for site in self.rss_db:
-            if m.group("display_this") in site.url:
-                if not site.diff:
-                    self.say("No diff!")
-                else:
-                    self.say("\x02Diff:")
-                    for line in site.diff.split("\n")[3:]:
-                        if line.startswith("-"):
-                            prefix = "\x034"
-                        elif line.startswith("+"):
-                            prefix = "\x033"
-                        else:
-                            prefix = ""
-                        self.say(prefix+line)
-                break
+            if "".join(args) in site.url:
+                entries = site.getentries(options.display)
+
+                for entry in entries:
+                    self.say("[RSS] \x02%s\x02 - \x1f%s" % (entry.get('title', ''), entry.get('link', '')))
+                    msg = entry.get('description', '')
+                    msg = re.sub("<br\s?/?>", "\n", msg)
+                    msg = rh(msg).split("\n")[:3] # print max 3 lines of description
+                    for line in msg:
+                        self.say(line)
 
     elif options.check:
         checksites(self, options.check)
@@ -159,6 +179,12 @@ def rss(self, input):
 
     elif args:
         url = " ".join(args)
+
+        for site in self.rss_db:
+            if url == site.url:
+                self.say("Feed already exists, try using the -l switch to check for it.")
+                return
+            
         try:
             site = RSS(url, input.nick, input.sender)
         except Exception, e:
@@ -167,7 +193,7 @@ def rss(self, input):
         
         try:
             if site.check() == None:
-                self.say("\x02Error:\x02 Unable to parse the feed at %s." % m.group("url"))
+                self.say("\x02Error:\x02 Unable to parse the feed at %s." % url)
                 return
         except Exception, e:
             self.say("Error: %s" % e)
@@ -183,16 +209,10 @@ rss.usage = [("Add a new feed","$pcmd <url>"),
              ("Remove feeds whose URLs contain pattern", "$pcmd -r <pattern"),
              ("Check feeds whose URLs contain patter", "$pcmd -c <pattern>"),
              ("List all feeds", "$pcmd -l"),
-             ("List all feeds whose URLs contain pattern", "$pcmd -l <pattern>")]
-rss.example = [("Check all added Reddit feeds, if any exist", "$pcmd -c reddit")]
+             ("List all feeds whose URLs contain pattern", "$pcmd -l <pattern>"),
+             ("Check the last num entries from a particular feed", "$pcmd -d<num> <pattern>")]
+rss.example = [("Check all added Reddit feeds, if any exist", "$pcmd -c reddit"),
+               ("View the last 3 entries from Reddit", "$pcmd -d3 reddit")]
 rss.thread = True
-
-class OptionParserMod(OptionParser):
-    
-    # This method allows us to handle the error in our own way, in this
-    # case to aid us in determining when faulty input was provided and
-    # showing usage information to the user.
-    def error(self, description):
-        raise ValueError, description
 
 

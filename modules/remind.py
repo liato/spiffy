@@ -138,6 +138,7 @@ message.rule = r'(.*)'
                                                   
 
 def tell(self,input):
+    "Delivers a message to a recipient the next time he or she says something."
     teller = input.nick
     
     verb, tellee, msg = input.groups()
@@ -237,6 +238,7 @@ def tryremind(self,id,sender,receiver,message,time,chan):
 
 
 def remind(self,input):
+    "Delivers a message at a specific time, either relative or absolute."
     i = 0
     use_in = None
     if re.search(r" in (\d{1,} ?d(?:ay)?s?)? ?(-?\d{1,} ?h(?:our)?s?)? ?(-?\d{1,} ?m(?:inute|in)?s?)? ?(-?\d{1,} ?s(?:econd|ec)?s?)?",input.group()):

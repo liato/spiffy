@@ -5,6 +5,7 @@ import urllib2
 import time
 import datetime
 from pytz import timezone
+from decode import htmldecode
 
 
 def sl(self, input):
@@ -161,35 +162,3 @@ sl.example = [("Find out how to go from T-Centralen to Medborgarplatsen", "$pcmd
               ("Find out when your train leaves tomorrow morning, if you want to arrive at 08:00", "$pcmd T-Centralen, Slussen, 08:00")]
 
 sl.thread = True
-
-
-entity_sub = re.compile(r'&(#(\d+|x[\da-fA-F]+)|[\w.:-]+);?').sub
-
-def uchr(c):
-    if not isinstance(c, int):
-        return c
-    if c>255: return unichr(c)
-    return chr(c)
-
-def trydecode(s):
-    line = s[:]
-    try:
-        line = line.decode('iso-8859-1')
-    except UnicodeDecodeError: 
-        line = line.decode('utf-8', 'ignore')
-    return line
-
-def decode_entity(match):
-    what = match.group(1)
-    if what.startswith('#x'):
-        what = int(what[2:], 16)
-    elif what.startswith('#'):
-        what = int(what[1:])
-    else:
-        from htmlentitydefs import name2codepoint
-        what = name2codepoint.get(what, match.group(0))
-    return uchr(what)
-
-def htmldecode(text):
-    "Decode HTML entities in the given text."
-    return entity_sub(decode_entity, text)
