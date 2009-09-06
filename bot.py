@@ -113,6 +113,9 @@ class Bot(irc.IRCClient):
         t = threading.Thread(target=self.connectionWatcher)
         t.start()
         
+        if not os.path.exists("data"):
+            os.mkdir("data")
+        
         self.loadPlugins()
         irc.IRCClient.connectionMade(self)
         self._print("Connected to %s:%s at %s" % (self.transport.connector.host, self.transport.connector.port, time.asctime(time.localtime(time.time()))))
