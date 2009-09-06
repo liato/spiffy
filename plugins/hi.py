@@ -24,7 +24,7 @@ def hi(self, input):
             self.say(random.choice(greetings) + " " + input.nick + random.choice(endings))
         return
     
-    if re.match("thx|tack|thanks,? " + self.nickname, cmd, re.I):
+    if re.match("(?:thx|tack|thanks),? " + self.nickname, cmd, re.I):
         self.reply("np")
 
 hi.rule = r".*"
