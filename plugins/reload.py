@@ -21,12 +21,12 @@ def reload(self, input):
         self.say('\x02Error:\x02 %s' % e)
         return
 
-    if hasattr(module, '__file__'): 
+    if hasattr(plugin, '__file__'): 
         mtime = os.path.getmtime(plugin.__file__)
         modified = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(mtime))
     else:
         modified = 'unknown'
-    self.reply('%r (version: %s)' % (plugin, modified))
+    self.reply('<plugin%s (version: %s)' % (repr(plugin)[7:], modified))
 
 reload.rule = ['reload']
 reload.usage = [("Reload a plugin from the plugins directory", "$pcmd <plugin>"),

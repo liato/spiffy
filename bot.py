@@ -540,6 +540,14 @@ class Bot(irc.IRCClient):
        
 
     def runPlugin(self, func, bot, input):
+        if hasattr(func, 'usage'):
+            if input.args.split(' ',1)[0] in ('-h', '--help'):
+                if func.name in bot.doc:
+                    for e in bot.doc[func.name]:
+                        if e:
+                            bot.msg(input.sender, e)
+                    return
+
         try:
             func(bot, input)
         except self.BadInputError, e:
@@ -650,21 +658,10 @@ class QuickReplyWrapper(object):
             self.bot = bot
             self.input = input
             optparse.OptionParser.__init__(self, add_help_option=False)
-            self.add_option("-h", "--help", action="callback", callback=self.help_printer)
 
         def error(self, msg):
             raise self.bot.BadInputError(msg)
-            
-        def help_printer(self, option, opt, value, parser):
-            if self.input.funcname in self.bot.plugin_aliases:
-                cmd = self.bot.plugin_aliases[self.input.funcname]
-                for e in self.bot.doc[cmd]:
-                    if e:
-                        self.bot.msg(self.input.sender, e)
-            else:
-                self.say("Sorry, no help available for this command.")
-            sys.exit()
-                
+               
                 
 class ChanList(object):
 
