@@ -142,7 +142,9 @@ def tell(self,input):
     teller = input.nick
 
     m = re.search(r'([\S,]+) (.+)', input.args, re.I)
-    tellee, msg = input.groups()
+    if not m:
+        raise self.BadInputError()
+    tellee, msg = m.groups()
     tellee = tellee.encode('utf-8')
     msg = msg.encode('utf-8')
     
@@ -254,11 +256,11 @@ def remind(self, input):
         return
     
     try:
-        nick = input.args.split()[1]
+        nick = input.args.split()[0]
         reqnick = input.nick
         task = unicode(input.args[input.args.index(nick)+len(nick)+1:i])
         rtime = input.args[i+4:]
-    except ValueError,IndexError:
+    except (ValueError,IndexError):
         raise self.BadInputError()
 
     if nick == "me":

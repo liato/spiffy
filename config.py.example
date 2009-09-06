@@ -112,7 +112,7 @@ prefix = '!'
 #
 # chandebug - Print error messages to channel
 #
-#    Set to False if you don't want error messages from modules
+#    Set to False if you don't want error messages from plugins
 #    to be sent to the channel where the command was issued:
 #        chandebug = False
 #
@@ -125,43 +125,43 @@ chandebug = True
 
 #-#-#-#-#-#-#-#-#-#-#-#-#      MODULES       #-#-#-#-#-#-#-#-#-#-#-#-#
 #                                                                    #
-# modules_exclude - A list of modules to exclude
+# plugins_exclude - A list of plugins to exclude
 #
-#    Normally all modules from the 'modules' directory are loaded.
-#    If you wish to prevent some of the modules to load you need
-#    to include the filenames in modules_exclude.
+#    Normally all plugins from the 'plugins' directory are loaded.
+#    If you wish to prevent some of the plugins to load you need
+#    to include the filenames in plugins_exclude.
 #    If not file extension is specified '.py' is assumed.
-#    Prevent the imdb and cmd module from loading:
-#        modules_exclude = ['imdb', 'cmd']
+#    Prevent the imdb and cmd plugin from loading:
+#        plugins_exclude = ['imdb', 'cmd']
 #            or
-#        modules_exclude = ['imdb.py', 'cmd.py']
+#        plugins_exclude = ['imdb.py', 'cmd.py']
 #
-#   The default setting is to load all modules:
+#   The default setting is to load all plugins:
 
-modules_exclude = []
+plugins_exclude = []
 
-# modules_include - A list of modules to load
+# plugins_include - A list of plugins to load
 #
-#    Normally all modules from the 'modules' directory are loaded.
-#    If you only want specific modules to load you have to put all
-#    the filenames in modules_include.
-#    Note that this setting takes precedence over all other modules
+#    Normally all plugins from the 'plugins' directory are loaded.
+#    If you only want specific plugins to load you have to put all
+#    the filenames in plugins_include.
+#    Note that this setting takes precedence over all other plugins
 #    settings.
 #    If not file extension is specified '.py' is assumed.
-#    Don't load any modules:
-#        modules_include = []
+#    Don't load any plugins:
+#        plugins_include = []
 #
-#    Only load the imdb and cmd module:
-#        modules_include = ['imdb', 'cmd']
+#    Only load the imdb and cmd plugin:
+#        plugins_include = ['imdb', 'cmd']
 #            or
-#        modules_include = ['imdb.py', 'cmd.py']
+#        plugins_include = ['imdb.py', 'cmd.py']
 #
 #    Disable this setting:
-#        modules_include = False
+#        plugins_include = False
 #
-#   The default setting is to load all modules
+#   The default setting is to load all plugins
 
-modules_include = False
+plugins_include = False
 
 #                                                                    #
 #-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#

@@ -4,8 +4,8 @@ def help(self, input):
     cmd = input.args
     if not cmd:
         raise self.BadInputError()
-    if cmd in self.aliases:
-        cmd = self.aliases[cmd]
+    if cmd in self.plugin_aliases:
+        cmd = self.plugin_aliases[cmd]
         for e in self.doc[cmd]:
             if e:
                 self.say(e)

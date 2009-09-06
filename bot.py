@@ -45,8 +45,8 @@ config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
                                     'MODE', 'TOPIC', 'KICK', 'QUIT',
                                     'NOTICE', 'NICK', '332', '333'],
                     'verbose': True, 'reconnect': 10,
-                    'logpath': 'logs', 'modules_exclude': [],
-                    'modules_include': False}
+                    'logpath': 'logs', 'plugins_exclude': [],
+                    'plugins_include': False}
 
 def sourcesplit(source):
     """Split nick!user@host and return a 3-value tuple."""
@@ -107,13 +107,13 @@ class Bot(irc.IRCClient):
         self.logger = IRCLogger(self, self.config.get('logpath'))
         self.chanlist = ChanList(self)
         self.encoding = 'utf-8'
-        self.split = split #Make the split function accessible to modules
+        self.split = split #Make the split function accessible to plugins
         self.sourceURL = None #Disable source reply.
         self.lastmsg = time.mktime(time.gmtime())
         t = threading.Thread(target=self.connectionWatcher)
         t.start()
         
-        self.loadModules()
+        self.loadPlugins()
         irc.IRCClient.connectionMade(self)
         self._print("Connected to %s:%s at %s" % (self.transport.connector.host, self.transport.connector.port, time.asctime(time.localtime(time.time()))))
 
@@ -142,49 +142,45 @@ class Bot(irc.IRCClient):
                 self.sendLine("PING YO!")
             time.sleep(200)
 
-    def loadModules(self):
-        self._print("Loading modules...")
-        self.modules = {} #Modules loaded from the modules directory.
-        self.nickmodules = {} #Modules that have a <nick> trigger
-        self.doc = {} #Documentation for modules.
-        self.aliases = {} #Aliases for module commands.
-        modules = []
-        if os.path.exists(os.path.join(sys.path[0], 'modules')):
+    def loadPlugins(self):
+        self._print("Loading plugins...")
+        self.plugins = {} # Plugins loaded from the plugins directory.
+        self.plugins_nicktriggered = {} # plugins that have a <nick> trigger
+        self.doc = {} # Documentation for plugins.
+        self.plugin_aliases = {} # Aliases for plugin commands.
+        self.plugins_regex = {} # Plugins that use a regex for matching
+        
+        plugins = []
+        if os.path.exists(os.path.join(sys.path[0], "plugins")):
             filenames = []
 
-            if isinstance(self.config['modules_include'], (list, tuple)):
-                for fn in self.config['modules_include']:
+            if isinstance(self.config['plugins_include'], (list, tuple)):
+                for fn in self.config['plugins_include']:
                     if not "." in fn:
                         fn = fn + ".py"
-                    filenames.append(os.path.join(sys.path[0], 'modules', fn))
+                    filenames.append(os.path.join(sys.path[0], "plugins", fn))
             else:
-                for fn in os.listdir(os.path.join(sys.path[0], 'modules')): 
+                for fn in os.listdir(os.path.join(sys.path[0], "plugins")): 
                     if fn.endswith('.py') and not fn.startswith('_'):
-                        if not fn[:-3] in self.config['modules_exclude']:
-                            filenames.append(os.path.join(sys.path[0], 'modules', fn))
+                        if not fn[:-3] in self.config['plugins_exclude']:
+                            filenames.append(os.path.join(sys.path[0], "plugins", fn))
 
             for filename in filenames:
                 name = os.path.basename(filename)[:-3]
                 try:
-                    self.loadModule(filename)
-                    modules.append(name)
+                    self.loadPlugin(filename)
+                    plugins.append(name)
                 except Exception, e:
                     self._print("Error loading %s: %s (in bot.py)" % (name, e), 'err')
 
 
-        if modules: 
-           self._print('Registered modules: %s' % ', '.join(modules))
+        if plugins: 
+           self._print('Registered plugins: %s' % ', '.join(plugins))
         else:
-            if not self.config['modules_include'] == []:
-                self._print("Warning: Couldn't find any modules. Does /modules exist?", 'err')
+            if not self.config['plugins_include'] == []:
+                self._print("Warning: Couldn't find any plugins. Does /plugins exist?", 'err')
 
-    def loadModule(self, filename, function = None):
-
-        def bind(self, regexp, func): 
-            if func.name in self.modules:
-                self.modules[func.name].append((regexp, func))
-            else:
-                self.modules[func.name] = [(regexp, func)]
+    def loadPlugin(self, filename, function = None):
 
         def createdoc(self, func, commands = None):
             pcmd = self.config["prefix"] + func.name # pcmd = prefixed command
@@ -220,7 +216,7 @@ class Bot(irc.IRCClient):
                 example = None
 
             for command in commands or []:
-                self.aliases[command.lower()] = func.name
+                self.plugin_aliases[command.lower()] = func.name
             if func.name in (commands or []):
                 commands.remove(func.name)
             if commands:
@@ -232,44 +228,43 @@ class Bot(irc.IRCClient):
             self.doc[func.name] = (doc, usage, example, aliases)            
 
         def handlefunc(func):
-            if hasattr(func, 'commands') or hasattr(func, 'rule'):
+            if hasattr(func, 'rule'):
                 if not hasattr(func, 'name'): 
                     func.name = func.__name__
                 func.name = func.name.lower()
-                if func.name in self.modules:
-                    del self.modules[func.name]
                 
                 if not hasattr(func, 'event'):
                     func.event = 'PRIVMSG'
                 else:
                     func.event = func.event.upper()
        
-                if hasattr(func, 'rule'):
-                    if isinstance(func.rule, str):
-                        if '$nick' in func.rule:
-                            self.nickmodules[func.name] = func
-                        pattern = func.rule.replace('$nickname', self.nickname).replace('$nick', self.nickname)
-                        regexp = re.compile(pattern)
-                        bind(self, regexp, func)
-                        createdoc(self, func)
-        
-                    elif isinstance(func.rule, (tuple, list)): 
-                        prefix = self.config['prefix']
-                        commands = func.rule
-                        createdoc(self, func, commands)
-                        for command in commands:
-                            command = r'(?P<command>%s)(?:\s+(?P<args>.*))?$' % command
-                            regexp = re.compile(re.escape(prefix) + command, re.IGNORECASE)
-                            bind(self, regexp, func)
-         
+                self.plugins[func.name] = func
+                
+                if isinstance(func.rule, str):
+                    if '$nick' in func.rule:
+                        self.plugins_nicktriggered[func.name] = func
+                    pattern = func.rule.replace('$nickname', self.nickname).replace('$nick', self.nickname)
+                    regexp = re.compile(pattern)
+
+                    createdoc(self, func)
+                    
+                    self.plugins_regex[func.name] = regexp
+    
+                elif isinstance(func.rule, (tuple, list)):
+                    commands = func.rule
+                    createdoc(self, func, commands)
+                    
+                    for command in commands:
+                        self.plugin_aliases[command] = func.name               
+     
         if not function:
             name = os.path.basename(filename)[:-3]
-            module = imp.load_source(name, filename)
-            if hasattr(module, 'setup'): 
-               module.setup(self)
-            for name, func in vars(module).iteritems():
+            plugin = imp.load_source(name, filename)
+            if hasattr(plugin, 'setup'): 
+               plugin.setup(self)
+            for name, func in vars(plugin).iteritems():
                 handlefunc(func)
-            return module
+            return plugin
         else:
             handlefunc(function)
             return function
@@ -278,15 +273,20 @@ class Bot(irc.IRCClient):
         """Called when my nick has been changed.
         """
         self.nickname = nick
-        for func in self.nickmodules:
-            if func in self.modules:
-                del self.modules[func]
-            if func in self.doc:
-                del self.doc[func]
-            self.loadModule(filename=None, function = self.nickmodules[func])
+        for funcname in self.plugins_nicktriggered:
+            if funcname in self.plugins:
+                del self.plugins[funcname]
+                
+            if funcname in self.plugins_regex:
+                del self.plugins_regex[funcname]
+                
+            if funcname in self.doc:
+                del self.doc[funcname]
+                
+            self.loadPlugin(filename=None, function = self.plugins_nicktriggered[funcname])
 
     def rehash(self):
-        """Reload the config file and modules for this network.
+        """Reload the config file and plugins for this network.
         If the current network has been removed or renamed only global settings
         from the config file will be reloaded.
         """
@@ -331,11 +331,11 @@ class Bot(irc.IRCClient):
         self.config = serverconfig
         
 
-        oldmodules = self.modules.keys()
-        self.loadModules()
-        newmodules = self.modules.keys()
-        removed_modules = [x for x in oldmodules if x not in newmodules]
-        added_modules = [x for x in newmodules if x not in oldmodules]
+        oldplugins = self.plugins.keys()
+        self.loadPlugins()
+        newplugins = self.plugins.keys()
+        removed_plugins = [x for x in oldplugins if x not in newplugins]
+        added_plugins = [x for x in newplugins if x not in oldplugins]
         
         if added_settings:
             self._print('Added %s new settings:' % len(added_settings))
@@ -352,16 +352,16 @@ class Bot(irc.IRCClient):
             for setting in changed_settings:
                 self._print(" * '%s': %s -> %s" % setting)
         
-        if added_modules:
-            self._print('Loaded %s new modules:' % len(added_modules))
-            self._print(", ".join(added_modules))
+        if added_plugins:
+            self._print('Loaded %s new plugins:' % len(added_plugins))
+            self._print(", ".join(added_plugins))
 
-        if removed_modules:
-            self._print('Removed %s modules:' % len(removed_modules))
-            self._print(", ".join(removed_modules))
+        if removed_plugins:
+            self._print('Removed %s plugins:' % len(removed_plugins))
+            self._print(", ".join(removed_plugins))
 
-        return {'modules': {'removed': removed_modules,
-                            'added': added_modules
+        return {'plugins': {'removed': removed_plugins,
+                            'added': added_plugins
                             },
                 'settings': {'removed': removed_settings,
                              'added': added_settings,
@@ -495,24 +495,48 @@ class Bot(irc.IRCClient):
         if command[0].upper() in ("JOIN", "331", "332", "333", "352", "353", "KICK", "PART", "QUIT", "NICK", "TOPIC"):
             self.chanlist.handleChange(prefix, command, params, text)
         if command[0] == "005":
-            self.sendLine('PROTOCTL NAMESX') 
+            self.sendLine('PROTOCTL NAMESX')
+            
+        if not text:
+            return
         
-        modules = self.modules.values()
-        for module in modules:
-            for regexp, func in module:
+        if text.startswith(self.config["prefix"]):
+            splitline = text[1:].split(" ", 1)
+            cmd = splitline[0]
+
+            
+            if len(splitline) == 1:
+                args = None
+            else:
+                args = splitline[1:]
+            
+            
+            if cmd in self.plugin_aliases:
+                func = self.plugins[self.plugin_aliases[cmd]]
+                
                 if not func.event in command:
-                    continue
+                    return
 
-                match = regexp.match(text)
-                if match:
-                    input = CommandInput(self, prefix, command, params, text, match, line, func.name)
-                    bot = QuickReplyWrapper(self, input)
-                    targs = (func, bot, input)
-                    t = threading.Thread(target=self.runModule, args=targs)
-                    t.start()
+                input = CommandInput(self, prefix, command, params, text, None, line, func.name)
+                bot = QuickReplyWrapper(self, input)
+                targs = (func, bot, input)
+                t = threading.Thread(target=self.runPlugin, args=targs)
+                t.start()
+                return
+        
+        for name, regexp in self.plugins_regex.iteritems():
+            match = regexp.match(text)
+            if match:
+                func = self.plugins[name]
+                
+                input = CommandInput(self, prefix, command, params, text, match, line, func.name)
+                bot = QuickReplyWrapper(self, input)
+                targs = (func, bot, input)
+                t = threading.Thread(target=self.runPlugin, args=targs)
+                t.start()
+       
 
-
-    def runModule(self, func, bot, input):
+    def runPlugin(self, func, bot, input):
         try:
             func(bot, input)
         except self.BadInputError, e:
@@ -557,9 +581,18 @@ class CommandInput(object):
         self.line = line
         self.funcname = funcname
         self.event = event
-        self.match = match
-        self.group = match.group
-        self.groups = match.groups
+        
+        if match: # plugin uses regex
+            self.match = match
+            self.group = match.group
+            self.groups = match.groups
+            self.command = self.args = text
+        else: # plugin uses command list
+            self.command = funcname
+            self.args = text.split(" ",1)[1] if text.strip().count(" ") > 0 else ""
+            
+            self.group = lambda i: self.args if i == 2 else text # placeholder until plugins are ported
+            
         self.params = params
         if len(params) > 0: 
             self.sender = params[0]
@@ -570,12 +603,7 @@ class CommandInput(object):
         self.sender = mappings.get(self.sender, self.sender)
         self.channel = self.sender
         self._bot = bot
-        if 'command' in match.groupdict() and 'args' in match.groupdict():
-            self.command = match.group('command')
-            self.args = match.group('args')
-        else:
-            self.command = self.args = match.group(0)
-        
+
     def isowner(self, *args):
         if not 'ownermask' in self._bot.config:
             return False
@@ -625,8 +653,8 @@ class QuickReplyWrapper(object):
             raise self.bot.BadInputError(msg)
             
         def help_printer(self, option, opt, value, parser):
-            if self.input.funcname in self.bot.aliases:
-                cmd = self.bot.aliases[self.input.funcname]
+            if self.input.funcname in self.bot.plugin_aliases:
+                cmd = self.bot.plugin_aliases[self.input.funcname]
                 for e in self.bot.doc[cmd]:
                     if e:
                         self.bot.msg(self.input.sender, e)
