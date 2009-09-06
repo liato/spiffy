@@ -65,14 +65,16 @@ class RSS:
 def setup(self): 
     self.rss_filename = os.path.join("data", 'rss.db')
     self.rss_db = None
-    if os.path.exists(self.rss_filename):
-        f = open(self.rss_filename, 'rb')
-        try:
-            fc = f.read()
-            self.rss_db = pickle.loads(fc)
-        except EOFError:
-            pass
-        f.close()
+    if not os.path.exists(self.rss_filename):
+        os.mkdir(self.rss_filename)
+
+    f = open(self.rss_filename, 'rb')
+    try:
+        fc = f.read()
+        self.rss_db = pickle.loads(fc)
+    except EOFError:
+        pass
+    f.close()
     if not self.rss_db:
         self.rss_db = []
 
