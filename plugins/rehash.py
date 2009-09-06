@@ -44,5 +44,5 @@ def rehash(self, input):
     self.say('Configuration successfully reloaded!')
         
 rehash.rule = ['rehash']
-rehash.usage = [("Reload the configuration and all plugins", "$nick $cmd"),
-    ("Verbose version of the command above", "$nick $cmd -v")]
+rehash.usage = [("Reload the configuration and all plugins", "$pcmd"),
+    ("Verbose version of the command above", "$pcmd -v")]

@@ -171,8 +171,8 @@ def tell(self,input):
     self.say("%s: I'll pass that along!" % teller)
     
 tell.rule = ['tell', 'ask']
-tell.usage = [("Give someone a message the next time they say something", "$nick, tell <recipient> <message>")]
-tell.example = [("Deliver a message to Joe when he shows up", "$nick, tell joe What's up?")]
+tell.usage = [("Give someone a message the next time they say something", "$pcmd <recipient> <message>")]
+tell.example = [("Deliver a message to Joe when he shows up", "$pcmd joe What's up?")]
 
 
 def humantime(seconds,style='tuple'):
@@ -315,11 +315,11 @@ def remind(self, input):
         
 remind.rule = ["remind"]
 
-remind.usage = [("Add a reminder to be delivered at a specific time", "$nick, remind <recipient> <message> at <[date]time>"),
-              ("Add a reminder to be delivered in a certain amount of time", "$nick, remind <recipient> <message> in <time>")]
+remind.usage = [("Add a reminder to be delivered at a specific time", "$pcmd <recipient> <message> at <[date]time>"),
+              ("Add a reminder to be delivered in a certain amount of time", "$pcmd <recipient> <message> in <time>")]
 remind.example = [("Remind yourself to watch Lost", "$nick, remind me Watch Lost! at 20:55"),
-                ("Remind yourself to do whatever on New Year's Eve 2039", "$nick, remind me Party like it's 1999! at 2039-12-31 20:00"),
-                ("Remind Joe to give pick you up in a week", "$nick, remind Joe Pick me up at the airport! in 1 week")]
+                ("Remind yourself to do whatever on New Year's Eve 2039", "$pcmd me Party like it's 1999! at 2039-12-31 20:00"),
+                ("Remind Joe to give pick you up in a week", "$pcmd Joe Pick me up at the airport! in 1 week")]
 
 
 
