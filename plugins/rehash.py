@@ -33,16 +33,16 @@ def rehash(self, input):
             for setting in info['settings']['changed']:
                 self.say(" * '%s': %s \x02->\x02 %s" % setting)
         
-        if info['modules']['added']:
-            self.say('Loaded \x02%s\x02 new module%s:' % (len(info['modules']['added']), s(info['modules']['added'])))
-            self.say(", ".join(info['modules']['added']))
+        if info['plugins']['added']:
+            self.say('Loaded \x02%s\x02 new plugin%s:' % (len(info['plugins']['added']), s(info['plugins']['added'])))
+            self.say(", ".join(info['plugins']['added']))
 
-        if info['modules']['removed']:
-            self.say('Removed \x02%s\x02 module%s:' % (len(info['modules']['removed']), s(info['modules']['removed'])))
-            self.say(", ".join(info['modules']['removed']))    
+        if info['plugins']['removed']:
+            self.say('Removed \x02%s\x02 plugin%s:' % (len(info['plugins']['removed']), s(info['plugins']['removed'])))
+            self.say(", ".join(info['plugins']['removed']))    
 
     self.say('Configuration successfully reloaded!')
         
 rehash.rule = ['rehash']
-rehash.usage = [("Reload the configuration and all modules", "$nick $cmd"),
+rehash.usage = [("Reload the configuration and all plugins", "$nick $cmd"),
     ("Verbose version of the command above", "$nick $cmd -v")]
