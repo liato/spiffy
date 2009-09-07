@@ -2,18 +2,10 @@ import datetime
 import re
 from threading import Timer
 
+from utils import humantime
+
 import parsedatetime.parsedatetime as pdt
 from twisted.words.protocols.irc import numeric_to_symbolic, symbolic_to_numeric
-
-def humantime(seconds, string=True):
-    m,s = divmod(seconds, 60)
-    h,m = divmod(m, 60)
-    d,h = divmod(h, 24)
-    w,d = divmod(d, 7)
-    if string:
-        return ((w and str(w)+'w ' or '')+(d and str(d)+'d ' or '')+(h and str(h)+'h ' or '')+(m and str(m)+'m ' or '')+(s and str(s)+'s' or '')).strip()
-    else:
-        return (w, d, h, m, s)
 
 def postpone(self, input):
     """Postpones the given command for a given amount of time."""

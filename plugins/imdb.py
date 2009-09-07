@@ -1,10 +1,9 @@
 import copy
 import htmlentitydefs
 import re
-import urllib2 as urllib
-from BeautifulSoup import BeautifulSoup as bs
 import urllib2
 
+from BeautifulSoup import BeautifulSoup as bs
 
 # Unescape code by Fredrik Lundh - October 28, 2006
 # http://effbot.org/zone/re-sub.htm#unescape-html
@@ -80,7 +79,7 @@ class imdblib(object):
     
     
         def update(self):
-            data = urllib.urlopen("http://www.imdb.com/title/tt%s/" % self.id)
+            data = urllib2urlopen("http://www.imdb.com/title/tt%s/" % self.id)
             movie = bs(data.read(), convertEntities=bs.HTML_ENTITIES, markupMassage=hexentityMassage)
             self.title = movie.head.title.string
             year = re.search(r"\((?P<year>\d{4})\)$",self.title)
@@ -148,7 +147,7 @@ class imdblib(object):
                 pass
     
             if self.fullplot:            
-                data = urllib.urlopen("http://www.imdb.com/title/tt%s/plotsummary" % self.id)
+                data = urllib2urlopen("http://www.imdb.com/title/tt%s/plotsummary" % self.id)
                 movie = bs(data.read(), convertEntities=bs.HTML_ENTITIES, markupMassage=hexentityMassage)
                 try:
                     self.fullplot = movie.find(id="tn15content").find("p","plotpar").contents[0].strip()
@@ -194,7 +193,7 @@ class imdblib(object):
     
     
         def update(self):
-            data = urllib.urlopen("http://www.imdb.com/name/nm%s/" % self.id)
+            data = urllib2urlopen("http://www.imdb.com/name/nm%s/" % self.id)
             movie = bs(data.read(), convertEntities=bs.HTML_ENTITIES, markupMassage=hexentityMassage)
             self.name = movie.head.title.string
             self.birthdate = " ".join(self._infodiv(movie,"Date of Birth:", find="a", href=re.compile(r"onthisday|borninyear", re.I)))
@@ -248,7 +247,7 @@ class imdblib(object):
             
             if self.name:
                 regex = [r"<a href=\"\/name\/(nm\d{7})\/\"[^>]*>([^<]*?)</a>"]
-                url = "http://www.imdb.com/find?s=nm&q=%s" % urllib.quote(searchstring.encode('latin-1'))
+                url = "http://www.imdb.com/find?s=nm&q=%s" % urllib2quote(searchstring.encode('latin-1'))
             else:
                 m = re.search(r"(?P<movie>.+?)(?: \(?(?P<year>\d{4})\)?)?$", searchstring, re.I)
                 movie = m.group("movie").strip(" ")
@@ -268,10 +267,10 @@ class imdblib(object):
                 regex.append(r"<a href=\"\/title\/(tt\d{7})\/\"[^>]*>(\""+movie+"\")</a>")
                 regex.append(r"<a href=\"\/title\/(tt\d{7})\/\"[^>]*>([^<]*?"+movie+"[^<]*?)</a>")
                 regex.append(r"<a href=\"\/title\/(tt\d{7})\/\"[^>]*>([^<]*?)</a>")
-                url = "http://www.imdb.com/find?s=tt&q=%s" % urllib.quote(m.group("movie").encode('latin-1'))
+                url = "http://www.imdb.com/find?s=tt&q=%s" % urllib2quote(m.group("movie").encode('latin-1'))
             
         
-            url = urllib.urlopen(url)
+            url = urllib2urlopen(url)
             if "/find?s=" not in url.url: # We've been redirected to the first result
                 m = re.search(r"/(?:name|title)/(?P<result>(?:nm|tt)\d{7})", url.url, re.I)
                 if m:

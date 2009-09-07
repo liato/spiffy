@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from decode import htmldecode
-
 import datetime
 import hashlib
 import os
@@ -8,7 +5,11 @@ import pickle
 import re
 import threading
 import urllib2
+
+from utils import htmldecode
+
 import feedparser
+
 
 class RSS:
     def __init__(self, url=None, added_by=None, chan=None):

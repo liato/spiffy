@@ -1,32 +1,11 @@
 import re
 import urllib
 
-from decode import htmldecode
+from utils import decodehtml, removehtml, unescapeuni
 
-def uni(s):
-    "converts \uXXXX in s to their ascii counterparts"
-    ret = ""
-    i = 0
-    while i < len(s):
-        if s[i:i+2] == "\u":
-            x = int(s[i+2:i+6],16)
-            if x < 256:
-                ret += chr(x)
-            i += 6
-        else:
-            ret += s[i]
-            i+=1
-    return ret
 
-def rh(s):
-    #remove html and other crap
-    s = htmldecode(s)
-    s = re.sub("<[^>]+>","",s)
-    s = re.sub(" +"," ",s)
-    return s
-    
 def google(self, input):
-    """Perform a web search using the Google search engiene"""
+    """Perform a web search using the Google search engine"""
 
     args = input.args or ""
     parser = self.OptionParser()
@@ -46,21 +25,23 @@ def google(self, input):
     except IOError: 
         self.say("Error: Unable to establish a connection to google.com")
         return
-    data =  uni(data)
+    data =  unescapeuni(data)
+    data = decodehtml(data)
+
     m = re.search('estimatedResultCount":"([^"]+)"', data)
     if m:
         matches = m.group(1)
-    m = re.findall(r'"url":"([^"]*)".*?"titleNoFormatting":"([^"]*)","content":"([^"]*)"',data,re.IGNORECASE)
+    m = re.findall(r'"url":"([^"]*)".*?"titleNoFormatting":"([^"]*)","content":"([^"]*)"', data, re.IGNORECASE)
     if m:
         if len(m) < options.results:
             options.results = len(m)
         if options.results == 1:
-            self.say('\x02%s\x02 - ( \x1f%s\x1f ) [%s matches]' % (rh(m[0][1]), urllib.unquote(m[0][0]), matches))
-            self.say(rh(m[0][2]))
+            self.say('\x02%s\x02 - ( \x1f%s\x1f ) [%s matches]' % (removehtml(m[0][1]), urllib.unquote(m[0][0]), matches))
+            self.say(removehtml(m[0][2]))
         else:
             self.say('Showing the first \x02%s\x02 of \x02%s\x02 matches' % (options.results, matches))
             for x in range(options.results):
-                self.say('\x02%s\x02 - ( \x1f%s\x1f )' % (rh(m[x][1]), urllib.unquote(m[x][0])))
+                self.say('\x02%s\x02 - ( \x1f%s\x1f )' % (removehtml(m[x][1]), urllib.unquote(m[x][0])))
 
     else:
         phenny.say('Your search for \x02%s\x02 did not return any results.' % input.args)

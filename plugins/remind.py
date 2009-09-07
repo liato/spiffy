@@ -1,11 +1,11 @@
-import sqlite3
 import datetime
 import os
 import re
-import parsedatetime.parsedatetime as pdt
-
-from pytz import timezone
+import sqlite3
 from threading import Timer
+
+from parsedatetime import parsedatetime as pdt
+from pytz import timezone
 
 ltz = timezone("Europe/Stockholm")
 

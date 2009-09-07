@@ -5,7 +5,8 @@ import time
 import urllib
 import urllib2
 
-from decode import htmldecode
+from utils import htmldecode
+
 from pytz import timezone
 
 
