@@ -5,7 +5,6 @@ import sqlite3
 from threading import Timer
 
 from parsedatetime import parsedatetime as pdt
-from pytz import timezone
 
 ltz = timezone("Europe/Stockholm")
 
@@ -52,7 +51,7 @@ def setup(self):
 
     remove = []
     c.execute("select * from reminds")
-    now = getdatetime()
+    now = self.localtime()
     rows = c.fetchall()
     c.close()
     conn.close()
@@ -185,9 +184,6 @@ def humantime(seconds,style='tuple'):
     else:
         return (w,d,h,m,s)
 
-def getdatetime():
-    return datetime.datetime(*ltz.fromutc(datetime.datetime.utcnow()).timetuple()[:6])
-
 def saveremind(self,sender,receiver,message,time,asktime,chan):
     dbname = "tellremind.%s.s3db" % self.config["network"]
     
@@ -267,7 +263,7 @@ def remind(self, input):
         nick = input.nick
 
     seconds = 0
-    now = getdatetime()
+    now = self.localtime()
     if use_in:
         match = re.search(r"(\d{1,} ?d(?:ay)?s?)? ?(-?\d{1,} ?h(?:our)?s?)? ?(-?\d{1,} ?m(?:inute|in)?s?)? ?(-?\d{1,} ?s(?:econd|ec)?s?)?", rtime)
         if match:
@@ -308,7 +304,7 @@ def remind(self, input):
     
     
     id = saveremind(self,reqnick,nick,task,
-                    getdatetime() + datetime.timedelta(*divmod(seconds,86400)),getdatetime(),input.sender)
+                    self.localtime() + datetime.timedelta(*divmod(seconds,86400)),self.localtime(),input.sender)
 
     t = Timer(seconds, lambda: tryremind(self,id,reqnick,nick,task,now,input.sender))
     t.start()

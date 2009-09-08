@@ -36,6 +36,11 @@ try:
     import MySQLdb
 except ImportError:
     MySQLdb = None
+    
+try:
+    from pytz import timezone
+except ImportError:
+    timezone = None
 
 
     
@@ -46,40 +51,13 @@ config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
                                     'NOTICE', 'NICK', '332', '333'],
                     'verbose': True, 'reconnect': 10,
                     'logpath': 'logs', 'plugins_exclude': [],
-                    'plugins_include': False}
+                    'plugins_include': False, 'timezone': None}
 
 def sourcesplit(source):
     """Split nick!user@host and return a 3-value tuple."""
     r = re.compile(r'([^!]*)!?([^@]*)@?(.*)')
     m = r.match(source)
     return m.groups()
-
-def toUnicode(line, enc=None):
-    if isinstance(line, str):
-        done = False
-        if isinstance(enc, str):
-            try:
-                line = line.decode(enc)
-                done = True
-            except:
-                pass
-        if not done:            
-            try:
-                line = line.decode('utf-8')
-            except UnicodeDecodeError: 
-                try:
-                    line = line.decode('iso-8859-1')
-                except UnicodeDecodeError: 
-                    try:
-                        line = line.decode('cp1252')
-                    except UnicodeDecodeError:
-                        line = line.decode('utf-8', 'ignore')
-    elif isinstance(line, unicode):
-        pass
-    else:
-        line = repr(line)
-    return line
-
 
 class Bot(irc.IRCClient):
     
@@ -442,11 +420,37 @@ class Bot(irc.IRCClient):
         """This will get called when the bot joins the channel."""
         self._print("Joined %s" % channel)
 
+    def toUnicode(self, line, enc=None):
+        if isinstance(line, str):
+            done = False
+            if isinstance(enc, str):
+                try:
+                    line = line.decode(enc)
+                    done = True
+                except:
+                    pass
+            if not done:            
+                try:
+                    line = line.decode('utf-8')
+                except UnicodeDecodeError: 
+                    try:
+                        line = line.decode('iso-8859-1')
+                    except UnicodeDecodeError: 
+                        try:
+                            line = line.decode('cp1252')
+                        except UnicodeDecodeError:
+                            line = line.decode('utf-8', 'ignore')
+        elif isinstance(line, unicode):
+            pass
+        else:
+            line = repr(line)
+        return line
+
     def msg(self, receiver, message):
 
         # "It's easier to ask forgiveness than it is to get permission"
         # ...meaning that we force the message into a string!
-        message = toUnicode(message)
+        message = self.toUnicode(message)
 
         lines = message.split("\n")
         for line in lines:
@@ -454,7 +458,7 @@ class Bot(irc.IRCClient):
             self.sendLine("PRIVMSG %s :%s" % (receiver, line))
 
     def notice(self, receiver, message):
-        message = toUnicode(message)
+        message = self.toUnicode(message)
         lines = message.split("\n")
         for line in lines:
             self.logger.log(self.me, 'NOTICE', [receiver], line)
@@ -469,7 +473,7 @@ class Bot(irc.IRCClient):
     def lineReceived(self, line):
         self.lastmsg = time.mktime(time.gmtime())
         line = lowDequote(line)
-        line = toUnicode(line)
+        line = self.toUnicode(line)
         try:
             prefix, command, params, text = self.parsemsg(line)
             if numeric_to_symbolic.has_key(command):
@@ -583,6 +587,14 @@ class Bot(irc.IRCClient):
         if self.config.get('versionreply', None):
             nick = user.split("!",1)[0]
             self.ctcpMakeReply(nick, [('VERSION', '%s' % self.config['versionreply'])])
+            
+    def localtime(self):
+        if timezone and self.config['timezone']:
+            try:
+                return datetime.datetime(*timezone(self.config['timezone']).fromutc(datetime.datetime.utcnow()).timetuple()[:6])
+            except KeyError:
+                pass
+        return datetime.datetime.now()
 
 
 class CommandInput(object):

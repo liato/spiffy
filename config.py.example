@@ -123,7 +123,7 @@ chandebug = True
 #                                                                    #
 #-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
-#-#-#-#-#-#-#-#-#-#-#-#-#      MODULES       #-#-#-#-#-#-#-#-#-#-#-#-#
+#-#-#-#-#-#-#-#-#-#-#-#-#      PLUGINS       #-#-#-#-#-#-#-#-#-#-#-#-#
 #                                                                    #
 # plugins_exclude - A list of plugins to exclude
 #
@@ -140,6 +140,7 @@ chandebug = True
 
 plugins_exclude = []
 
+#
 # plugins_include - A list of plugins to load
 #
 #    Normally all plugins from the 'plugins' directory are loaded.
@@ -159,9 +160,26 @@ plugins_exclude = []
 #    Disable this setting:
 #        plugins_include = False
 #
-#   The default setting is to load all plugins
+#   The default setting is to load all plugins:
 
 plugins_include = False
+
+#
+# timezone - Timezone to use instead of the local timezone.
+#
+#    This setting requires the pytz library from:
+#    http://pypi.python.org/pypi/pytz/
+#
+#    If a valid timezone is set the plugins will be able to get the
+#    the datetime of the specified timezone by using self.localtime()
+#    instead of datetime.datetime.now().
+#    This setting is useful if your server is located in a different
+#    timezone than you.
+#    A list of all valid timezones can be found in pytz.all_timezones
+#
+#   The default setting is to use the local timezone:
+
+timezone = None
 
 #                                                                    #
 #-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
