@@ -6,7 +6,7 @@ import re
 import threading
 import urllib2
 
-from utils import htmldecode
+from utils import decodehtml, removehtml
 
 import feedparser
 
@@ -95,13 +95,6 @@ def savedb(fn, data):
             return False
     return False
 
-def rh(s):
-    #remove html and other crap
-    #s = htmldecode(s)
-    s = re.sub("<[^>]+>","",s)
-    s = re.sub(" +"," ",s)
-    return s
-
 def checksites(self, pattern=None, savefunc=None):
     for site in self.rss_db:
         if (pattern or "") in site.url:
@@ -113,7 +106,7 @@ def checksites(self, pattern=None, savefunc=None):
                         self.sendLine("PRIVMSG " + site.chan + " :[RSS] \x02%s\x02 - \x1f%s" % (entry.get('title', ''), entry.get('link', '')))
                         msg = entry.get('description', '')
                         msg = re.sub("<br\s?/?>", "\n", msg)
-                        msg = rh(msg).split("\n")
+                        msg = removehtml(msg).split("\n")
                         for line in msg:
                             self.sendLine("PRIVMSG %s :%s" % (site.chan, line))
                         
@@ -164,7 +157,7 @@ def rss(self, input):
                     self.say("[RSS] \x02%s\x02 - \x1f%s" % (entry.get('title', ''), entry.get('link', '')))
                     msg = entry.get('description', '')
                     msg = re.sub("<br\s?/?>", "\n", msg)
-                    msg = rh(msg).split("\n")[:3] # print max 3 lines of description
+                    msg = removehtml(msg).split("\n")[:3] # print max 3 lines of description
                     for line in msg:
                         self.say(line)
 

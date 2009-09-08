@@ -1,0 +1,51 @@
+<pre>
+                                  _ ________                         
+                      _________  (_) __/ __/__  __                   
+                     / ___/ __ \/ / /_/ /_ / / / /                   
+                    (__  ) /_/ / / __/ __// /_/ /                    
+                   /____/ .___/_/_/ /_/   \__, /                     
+                       /_/               /____/                      
+
+</pre>
+
+h2. Dependecies
+
+h3. Required
+
+"Twisted":http://twistedmatrix.com/trac/
+"zope.interface":http://pypi.python.org/pypi/zope.interface
+
+h3. Optional
+
+*Connecting to SSL servers:*
+"pyOpenSSL":https://launchpad.net/pyopenssl
+
+*Logging to SQLite or MySQL:*
+Python 2.6 or "simplejson":http://undefined.org/python/#simplejson or "python-cjson":http://pypi.python.org/pypi/python-cjson/1.0.5
+
+*Logging to MySQL:*
+"MySQLdb":http://sourceforge.net/projects/mysql-python/
+
+*Using timezone other than local in plugins:*[1]
+"pytz":http://pypi.python.org/pypi/pytz/
+
+h3. Plugins
+
+*IMDB plugin:*
+"Beautiful Soup 3.0.7a":http://www.crummy.com/software/BeautifulSoup/
+
+*RSS plugin:*
+"feedparser":http://www.feedparser.org/
+
+*SL plugin:*
+"pytz":http://pypi.python.org/pypi/pytz/ (optional)[1]
+
+*Steam plugin:*
+"Beautiful Soup 3.0.7a":http://www.crummy.com/software/BeautifulSoup/
+
+*Tell/Remind plugin:*
+"pytz":http://pypi.python.org/pypi/pytz/ (optional)[1]
+
+
+
+fn1. If a valid timezone is set the plugins will be able to get the datetime of the specified timezone by using self.localtime() instead of datetime.datetime.now(). This can be useful if your server is located in a different timezone than you.
