@@ -11,7 +11,7 @@ days = ["",
         "Saturday",
         "Sunday"]
 
-def vecka(self, input):
+def week(self, input):
     """Displays the week and weekday for today or for a given date."""
     m = input.args
     msg = lambda s: self.say(s)
@@ -34,7 +34,7 @@ def vecka(self, input):
                                        chr(2),date.isocalendar()[1],chr(2)))
 
 
-vecka.rule = ["vecka", "week"]
-vecka.usage = [("Display the current week", "$pcmd"),
+week.rule = ["vecka", "week"]
+week.usage = [("Display the current week", "$pcmd"),
                ("Display the week for a given date", "$pcmd YYYY-MM-DD")]
-vecka.example = [("Display the week Halloween was in in 1999", "$pcmd 1999-10-31")]
+week.example = [("Display the week Halloween was in in 1999", "$pcmd 1999-10-31")]
