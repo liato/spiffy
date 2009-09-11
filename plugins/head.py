@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-"""
-head.py - self HTTP Metadata Utilities
-Copyright 2008, Sean B. Palmer, inamidst.com
-Licensed under the Eiffel Forum License 2.
-
-http://inamidst.com/self/
-"""
-
 import re
 import urllib
 import urllib2
@@ -47,10 +38,6 @@ head.rule = ['head']
 head.usage = [("Fetch the headers of a web page", "$pcmd <URL>"),
    ("Fetch the headers of the last seen URL in the current channel", "$pcmd")]
 head.example = [("Fetch the headers of Reddit's main page", "$pcmd www.reddit.com")]
-
-r_title = re.compile(r'(?ims)<title[^>]*>(.*?)</title\s*>')
-r_entity = re.compile(r'&[A-Za-z0-9#]+;')
-
 
 def title(self, input):
    "Fetches the contents of the <title> tag of a web page"
