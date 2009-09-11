@@ -24,6 +24,32 @@ def decodehtml(s):
     return entity_sub(decode_entity, s)
 
 
+def toUnicode(self, line, enc=None):
+    if isinstance(line, str):
+        done = False
+        if isinstance(enc, str):
+            try:
+                line = line.decode(enc)
+                done = True
+            except:
+                pass
+        if not done:            
+            try:
+                line = line.decode('utf-8')
+            except UnicodeDecodeError: 
+                try:
+                    line = line.decode('iso-8859-1')
+                except UnicodeDecodeError: 
+                    try:
+                        line = line.decode('cp1252')
+                    except UnicodeDecodeError:
+                        line = line.decode('utf-8', 'ignore')
+    elif isinstance(line, unicode):
+        pass
+    else:
+        line = repr(line)
+    return line
+
 def unescapeuni(s):
     """Converts \uXXXX in s to their ascii counterparts"""
     ret = ""
