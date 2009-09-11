@@ -24,7 +24,7 @@ def decodehtml(s):
     return entity_sub(decode_entity, s)
 
 
-def toUnicode(self, line, enc=None):
+def tounicode(self, line, enc=None):
     if isinstance(line, str):
         done = False
         if isinstance(enc, str):
