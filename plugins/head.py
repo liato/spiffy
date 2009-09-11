@@ -1,13 +1,7 @@
 import re
-import urllib
 import urllib2
-import httplib
-import urlparse
-import time
 
 from utils import tounicode
-
-from htmlentitydefs import name2codepoint
 
 def head(self, input):
    "Fetches the headers of a web page"
