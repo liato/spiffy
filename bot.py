@@ -15,6 +15,8 @@ import time
 import traceback
 import warnings
 
+from utils import tounicode
+
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric, split
 from twisted.internet import reactor, protocol
@@ -420,37 +422,11 @@ class Bot(irc.IRCClient):
         """This will get called when the bot joins the channel."""
         self._print("Joined %s" % channel)
 
-    def toUnicode(self, line, enc=None):
-        if isinstance(line, str):
-            done = False
-            if isinstance(enc, str):
-                try:
-                    line = line.decode(enc)
-                    done = True
-                except:
-                    pass
-            if not done:            
-                try:
-                    line = line.decode('utf-8')
-                except UnicodeDecodeError: 
-                    try:
-                        line = line.decode('iso-8859-1')
-                    except UnicodeDecodeError: 
-                        try:
-                            line = line.decode('cp1252')
-                        except UnicodeDecodeError:
-                            line = line.decode('utf-8', 'ignore')
-        elif isinstance(line, unicode):
-            pass
-        else:
-            line = repr(line)
-        return line
-
     def msg(self, receiver, message):
 
         # "It's easier to ask forgiveness than it is to get permission"
         # ...meaning that we force the message into a string!
-        message = self.toUnicode(message)
+        message = tounicode(message)
 
         lines = message.split("\n")
         for line in lines:
@@ -458,7 +434,7 @@ class Bot(irc.IRCClient):
             self.sendLine("PRIVMSG %s :%s" % (receiver, line))
 
     def notice(self, receiver, message):
-        message = self.toUnicode(message)
+        message = tounicode(message)
         lines = message.split("\n")
         for line in lines:
             self.logger.log(self.me, 'NOTICE', [receiver], line)
@@ -473,7 +449,7 @@ class Bot(irc.IRCClient):
     def lineReceived(self, line):
         self.lastmsg = time.mktime(time.gmtime())
         line = lowDequote(line)
-        line = self.toUnicode(line)
+        line = tounicode(line)
         try:
             prefix, command, params, text = self.parsemsg(line)
             if numeric_to_symbolic.has_key(command):
