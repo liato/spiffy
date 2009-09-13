@@ -4,7 +4,7 @@ import urllib2
 from utils import tounicode
 
 def head(self, input):
-   "Fetches the headers of a web page"
+   """Fetches the headers of a web page"""
    url = input.args
    
    if not url.strip() and hasattr(self, 'last_seen_url'): 
@@ -34,7 +34,7 @@ head.usage = [("Fetch the headers of a web page", "$pcmd <URL>"),
 head.example = [("Fetch the headers of Reddit's main page", "$pcmd www.reddit.com")]
 
 def title(self, input):
-   "Fetches the contents of the <title> tag of a web page"
+   """Fetches the contents of the <title> tag of a web page"""
    url = input.args
    
    if not url.strip() and hasattr(self, 'last_seen_url'): 
