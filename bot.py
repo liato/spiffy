@@ -423,15 +423,12 @@ class Bot(irc.IRCClient):
         self._print("Joined %s" % channel)
 
     def msg(self, receiver, message):
-
-        # "It's easier to ask forgiveness than it is to get permission"
-        # ...meaning that we force the message into a string!
         message = tounicode(message)
-
+        
         lines = message.split("\n")
         for line in lines:
             self.logger.log(self.me, 'PRIVMSG', [receiver], line)
-            self.sendLine("PRIVMSG %s :%s" % (receiver, line))
+            self.sendLine(u"PRIVMSG %s :%s" % (receiver, line))
 
     def notice(self, receiver, message):
         message = tounicode(message)

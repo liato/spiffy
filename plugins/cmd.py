@@ -6,7 +6,7 @@ def cmd(self, input):
         if not cmd:
             raise self.BadInputError()
         try:
-            msg = "\x02Result: \x02" + str(eval(cmd))
+            msg = u"\x02Result: \x02%s" % eval(cmd)
         except Exception, e:
             msg = "\x02Exception raised: \x02" + str(e)
 

@@ -6,8 +6,6 @@ from threading import Timer
 
 from parsedatetime import parsedatetime as pdt
 
-ltz = timezone("Europe/Stockholm")
-
 def setup(self):
     self.tells = {}
 
