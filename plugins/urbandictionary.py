@@ -13,6 +13,9 @@ def cleanup(s):
 def urbandictionary(self, input):
     """Look up a word in the urban dictionary"""
 
+    if not input.args:
+        raise self.BadInputError()
+        
     parser = self.OptionParser()
     parser.add_option('-d', '-r', '--display', '--results', dest="results", type="int", default=1)
     options, args = parser.parse_args((input.args or "").split())

@@ -6,6 +6,9 @@ from utils import removehtml, decodehtml
 def unnecessaryknowledge(self, input):
     """Get som unnecessary knowledge from unnecessaryknowledge.com"""
 
+    if not input.args:
+        raise self.BadInputError()
+        
     try:
         data = urllib.urlopen('http://www.unnecessaryknowledge.com/_default.asp').read()
     except IOError: 
