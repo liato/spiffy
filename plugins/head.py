@@ -11,7 +11,7 @@ def head(self, input):
       try:
          url = self.last_seen_url[input.sender]
       except KeyError:
-         self.reply("Failed spectacularly, try again later!")
+         self.reply("No URLs posted previously and none given, nothing I can do.")
          return
    elif not url.strip() and not hasattr(self, "last_seen_url"):
       self.reply("No URLs posted previously and none given, nothing I can do.")
@@ -24,6 +24,10 @@ def head(self, input):
       self.last_seen_url[input.sender] = url
    
    headers = urllib2.urlopen(url).headers
+   
+   if not headers:
+      self.say("Could not fetch page headers, perhaps the site is down?")
+      return
    
    for key, val in headers.dict.iteritems():
       self.say("\x02%s\x02: %s" % (key.capitalize(), val))
@@ -41,7 +45,7 @@ def title(self, input):
       try:
          url = self.last_seen_url[input.sender]
       except KeyError:
-         self.reply("Failed spectacularly, try again later!")
+         self.reply("No URLs posted previously and none given, nothing I can do.")
          return
    elif not url.strip() and not hasattr(self, "last_seen_url"):
       self.reply("No URLs posted previously and none given, nothing I can do.")
@@ -55,8 +59,12 @@ def title(self, input):
       
    page = tounicode(urllib2.urlopen(url).read())
    
-   title = re.search('<title>(.*?)</title>', page, re.I).group(1)
-   self.say("\x02Title:\x02 %s" % title)
+   title = re.search('<title>(.*?)</title>', page, re.I | re.MULTILINE | re.DOTALL)
+   
+   if not title:
+      self.say("Page has no title tag!")
+      return
+   self.say("\x02Title:\x02 %s" % title.group(1).replace("\n",""))
    
 title.rule = ["title"]
 title.usage = [("Fetch the title a web page", "$pcmd <URL>"),
@@ -64,7 +72,7 @@ title.usage = [("Fetch the title a web page", "$pcmd <URL>"),
 title.example = [("Fetch the title of Reddit's main page", "$pcmd www.reddit.com")]
 
 def noteurl(self, input):
-   m = re.search(r"(http://[^ ]+)", input.args, re.I)
+   m = re.search(r"(http://[^ ]+|www\.[^ ]+)", input.args, re.I)
    if not m:
       return
       

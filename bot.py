@@ -427,14 +427,14 @@ class Bot(irc.IRCClient):
         
         lines = message.split("\n")
         for line in lines:
-            self.logger.log(self.me, 'PRIVMSG', [receiver], line)
+            self.logger.log(self.me, ['PRIVMSG'], [receiver], line)
             self.sendLine(u"PRIVMSG %s :%s" % (receiver, line))
 
     def notice(self, receiver, message):
         message = tounicode(message)
         lines = message.split("\n")
         for line in lines:
-            self.logger.log(self.me, 'NOTICE', [receiver], line)
+            self.logger.log(self.me, ['NOTICE'], [receiver], line)
             self.sendLine("NOTICE %s :%s" % (receiver, line))
 
     def sendLine(self, line):
@@ -927,6 +927,7 @@ class IRCLogger(object):
                     self.mysql_curs = c
                     
                     self._log = self._mysqllog
+                    self._scrollback = self._mysql_scrollback
 
         
         if logtype == "sqlite":
@@ -952,6 +953,7 @@ class IRCLogger(object):
             conn.close()
             
             self._log = self._sqlitelog
+            self._scrollback = self._sqlite_scrollback
                         
         elif logtype == "text":
             # logpath will be either an absolute path ("/path/to/logdir/", "C:\logs\", etc)
@@ -962,6 +964,7 @@ class IRCLogger(object):
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
             self._log = self._plaintextlog
+            self._scrollback = self._plaintext_scrollback
 
     def log(self, prefix, command, params, text):
         if not self.enabled:
@@ -977,6 +980,8 @@ class IRCLogger(object):
     def parsetotext(self, prefix, command, params, text, timestamp = None):
         if not timestamp:
             timestamp = time.strftime("[%H:%M:%S]")
+        else:
+            timestamp = timestamp.strftime("[%H:%M:%S]")
                         
         nick, user, host = sourcesplit(prefix)
                 
@@ -1005,7 +1010,7 @@ class IRCLogger(object):
     def _mysqllog(self, prefix, command, params, text):  
         nick, user, host = sourcesplit(prefix)
         if not user:
-            return # Don't logg server messages.
+            return # Don't log server messages.
         timestamp = datetime.datetime.now()
         
         if command in ["PRIVMSG", "PART", "KICK", "TOPIC", "MODE", "NOTICE"]:
@@ -1034,8 +1039,7 @@ class IRCLogger(object):
 
             hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()
 
-            # check if a table exists for the current channel. sqlite_master contains
-            # info about all the tables in a particular SQLite database
+            # check if a table exists for the current channel.
             if nick.lower() == self.bot.nickname or not channel.startswith('#'):
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")                    
@@ -1053,15 +1057,13 @@ class IRCLogger(object):
             # table has been created if it didn't already exist, so we can do our insertions
             c.execute("INSERT INTO %s" % hashname + " (ts, prefix, nick, command, params, text) VALUES (%s, %s, %s, %s, %s, %s)", (timestamp, prefix, nick, command, json.dumps(params), text))
 
-
-        #c.close()
         conn.commit()
-        #conn.close()
 
-    def _sqlitelog(self, prefix, command, params, text):  
+    def _sqlitelog(self, prefix, command, params, text):
+
         nick, user, host = sourcesplit(prefix)
         if not user:
-            return # Don't logg server messages.
+            return # Don't log server messages.
         timestamp = datetime.datetime.now()
         
         if command in ["PRIVMSG", "PART", "KICK", "TOPIC", "MODE", "NOTICE"]:
@@ -1087,20 +1089,26 @@ class IRCLogger(object):
 
             # SQLite won't accept table names that start in 0-9, so we add spiffy_ in front
             hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()
+            
+            goahead = True
 
             # check if a table exists for the current channel. sqlite_master contains
             # info about all the tables in a particular SQLite database
-            if nick.lower() == self.bot.nickname or not channel.startswith('#'):
+            #self.bot.msg("#debug","nick: %s, channel: %s" % (nick, channel))
+            if channel.startswith('#') or (not channel.startswith("#") and nick.lower() != self.bot.nickname):
                 c.execute("select tbl_name from sqlite_master where tbl_name = ?", (hashname,))
                 if not c.fetchone():
                     c.execute("CREATE TABLE %s (ts TIMESTAMP, prefix TEXT, nick TEXT, command TEXT, params TEXT, text TEXT)" % hashname)
                     c.execute("CREATE INDEX idx_%s ON %s (command DESC, nick DESC, prefix DESC)" % (hashname, hashname))
                     self.bot._print("Created table %s (%s) in SQLite database" % (hashname, tablename))
                     c.execute("INSERT INTO spiffy_channels (hash, plaintext) VALUES (?,?)", (hashname, tablename))
-
-            # table has been created if it didn't already exist, so we can do our insertions
-            query = "INSERT INTO %s (ts, prefix, nick, command, params, text) VALUES (?,?,?,?,?,?)"
-            c.execute(query % hashname, (timestamp, prefix, nick, command, json.dumps(params), text))
+            else:
+                goahead = False
+                
+            if goahead:
+                # table has been created if it didn't already exist, so we can do our insertions
+                query = "INSERT INTO %s (ts, prefix, nick, command, params, text) VALUES (?,?,?,?,?,?)"
+                c.execute(query % hashname, (timestamp, prefix, nick, command, json.dumps(params), text))
 
 
         c.close()
@@ -1146,6 +1154,64 @@ class IRCLogger(object):
             logs[channel].flush()
                         
         self.bot.logs = logs
+
+
+    def _mysql_scrollback(self, chan, n):
+        "Returns the n last lines from chan"
+        
+        conn = self.mysql_conn
+        c = self.mysql_curs
+        
+        tablename = self.bot.config["network"] + u"." + chan
+        hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()
+        
+        query = "SELECT ts, prefix, nick, command, params, text FROM %s ORDER BY ts DESC LIMIT %s" % (hashname, n)
+        
+        c.execute(query)
+        
+        res = []
+        for row in c:
+            res.append(self.parsetotext(row[1], row[3], json.loads(row[4]), row[5], row[0])[2])
+        
+        return res[::-1]
+    
+    def _sqlite_scrollback(self, chan, n):
+        "Returns the n last lines from chan"
+        
+        conn = sqlite3.connect(self.logdir, detect_types = sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        tablename = self.bot.config["network"] + u"." + chan
+        hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()
+        
+        query = "SELECT ts, prefix, nick, command, params, text FROM %s ORDER BY ts DESC LIMIT %s" % (hashname, n)
+        
+        c.execute(query)
+        
+        res = []
+        for row in c:
+            res.append(self.parsetotext(row["prefix"], row["command"], json.loads(row["params"]), row["text"], row["ts"])[2])
+        
+        c.close()
+        conn.close()
+        
+        return res[::-1]
+    
+    def _plaintext_scrollback(self, chan, n):
+        "Returns the n last lines from chan"
+        
+        path = os.path.join("logs","%s.%s.log" % (self.bot.config["network"], chan))
+
+        iLines = -n-1
+    
+        if os.path.exists(path):
+            log = codecs.open(path,"r","utf-8")
+            log.seek(0,2)
+            log.seek(log.tell()-abs(iLines)*70)
+            lines = log.readlines()
+            return lines[iLines:]
+        
 
 
 class BotFactory(protocol.ClientFactory):
