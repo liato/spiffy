@@ -980,7 +980,7 @@ class IRCLogger(object):
     def parsetotext(self, prefix, command, params, text, timestamp = None):
         if not timestamp:
             timestamp = time.strftime("[%H:%M:%S]")
-        else:
+        elif isinstance(timestamp, datetime.datetime):
             timestamp = timestamp.strftime("[%H:%M:%S]")
                         
         nick, user, host = sourcesplit(prefix)
