@@ -61,7 +61,11 @@ def sourcesplit(source):
     m = r.match(source)
     return m.groups()
 
-class Bot(irc.IRCClient):
+#Rerout the following attributes to the BotFactory object.    
+persistent_attr = ['config', 'logger', 'plugins', 'plugins_nicktriggered',
+                    'doc', 'plugin_aliases', 'plugins_regex']
+
+class Bot(irc.IRCClient, object):
     
     class BadInputError(Exception):
         def __init__(self, value=None):
@@ -69,34 +73,51 @@ class Bot(irc.IRCClient):
         def __str__(self):
             return repr(self.value)
 
+    def __getattribute__(self, attr):
+        if attr in persistent_attr:
+            return getattr(object.__getattribute__(self, 'factory'), attr)
+        else:
+            return object.__getattribute__(self, attr)
+
+    def __setattr__(self, attr, value):
+        if attr in persistent_attr:
+            setattr(object.__getattribute__(self, 'factory'), attr, value)
+        else:
+            object.__setattr__(self, attr, value)      
+
     def connectionMade(self):
         self._print = self.factory._print
-        self.config = self.factory.config
+        #self.config = self.factory.config
         self.connections = self.factory.connections
         self.connections[self.config['network']] = self
+
+        if not hasattr(self.factory, 'logger'):
+            self.config['logevents'] = [s.upper() for s in self.config['logevents']]
+            self.logger = IRCLogger(self, self.config.get('logpath'))
+            self.loadPlugins()
+            if not os.path.exists("data"):
+                os.mkdir("data")
+
+        self.lastmsg = time.mktime(time.gmtime())
+        self.sourceURL = None #Disable source reply.
+        self.split = split #Make the split function accessible to plugins
+        self.encoding = 'utf-8'
+
+
         if isinstance(self.config['nick'], (list, tuple)):
             self.nickname = self.config['nick'][0]
             self.nickbucket = self.config['nick'][1:]
         else:
             self.nickname = self.config['nick']
             self.nickbucket = []
+
         self.username = self.config.get('user', self.nickname)
         self.realname = self.config.get('name', self.nickname)
         self.me = '%s!%s@unknown' % (self.nickname, self.username)
-        self.config['logevents'] = [s.upper() for s in self.config['logevents']]
-        self.logger = IRCLogger(self, self.config.get('logpath'))
         self.chanlist = ChanList(self)
-        self.encoding = 'utf-8'
-        self.split = split #Make the split function accessible to plugins
-        self.sourceURL = None #Disable source reply.
-        self.lastmsg = time.mktime(time.gmtime())
         t = threading.Thread(target=self.connectionWatcher)
         t.start()
         
-        if not os.path.exists("data"):
-            os.mkdir("data")
-        
-        self.loadPlugins()
         irc.IRCClient.connectionMade(self)
         self._print("Connected to %s:%s at %s" % (self.transport.connector.host, self.transport.connector.port, time.asctime(time.localtime(time.time()))))
 
@@ -1024,10 +1045,6 @@ class IRCLogger(object):
         else:
             channels = ["#debug"] # fixme
 
-        """conn = MySQLdb.connect(host = self.mysql_host, user = self.mysql_user,
-                             passwd = self.mysql_pass, db = self.mysql_db,
-                             port = self.mysql_port or 3306, charset = 'utf8')
-        c = conn.cursor()"""
         conn = self.mysql_conn
         c = self.mysql_curs
 
@@ -1160,7 +1177,7 @@ class IRCLogger(object):
         "Returns the n last lines from chan"
         
         conn = self.mysql_conn
-        c = self.mysql_curs
+        c = conn.cursor()
         
         tablename = self.bot.config["network"] + u"." + chan
         hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()

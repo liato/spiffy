@@ -2,7 +2,7 @@
 def sb(self, input):
     "Shows what's been said in the channel recently"
     
-    if not input.sender.startswith("#"):
+    if input.isprivate():
         self.say("No scrollback available for PMs")
         return
     

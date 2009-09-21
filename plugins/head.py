@@ -67,7 +67,7 @@ def title(self, input):
    self.say("\x02Title:\x02 %s" % title.group(1).replace("\n",""))
    
 title.rule = ["title"]
-title.usage = [("Fetch the title a web page", "$pcmd <URL>"),
+title.usage = [("Fetch the title of a web page", "$pcmd <URL>"),
    ("Fetch the title of the last seen URL in the current channel", "$pcmd")]
 title.example = [("Fetch the title of Reddit's main page", "$pcmd www.reddit.com")]
 

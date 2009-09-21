@@ -112,7 +112,7 @@ def ep(self, input):
         self.say('The show could not be found.')
         return
     
-    self.say('\x02%s\x02 - \x1f%s\x1f%s' % (show.show, show.showurl, ((show.status == 'Canceled/Ended') and '\x034(Canceled/Ended)\x03' or '')))
+    self.say('\x02%s\x02 - \x1f%s\x1f%s' % (show.show, show.showurl, ((show.status == 'Canceled/Ended') and ' \x034(Canceled/Ended)\x03' or '')))
     if not episode:
         if show.latest:
             self.say('Latest: \x02%s\x02 - %s [ %s | %s ]' % (show.latest[0], show.latest[1], show.latest[2].isoformat()[:10], daysago(show.latest[2])))
