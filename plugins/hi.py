@@ -26,5 +26,10 @@ def hi(self, input):
     
     if re.match("(?:thx|tack|thanks),? " + self.nickname, cmd, re.I):
         self.reply("np")
+        return
+    
+    m = re.match(self.nickname + r"[:!,] (\^5|_5|-5).*", cmd, re.I)
+    if m:
+        self.reply(m.group(1) + "!")
 
 hi.rule = r".*"
