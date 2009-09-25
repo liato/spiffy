@@ -73,25 +73,43 @@ class Bot(irc.IRCClient, object):
         def __str__(self):
             return repr(self.value)
 
+    #def __getattribute__(self, attr):
+    #    if attr in persistent_attr:
+    #        return getattr(object.__getattribute__(self, 'factory'), attr)
+    #    else:
+    #        return object.__getattribute__(self, attr)
     def __getattribute__(self, attr):
-        if attr in persistent_attr:
-            return getattr(object.__getattribute__(self, 'factory'), attr)
-        else:
+        try:
             return object.__getattribute__(self, attr)
+        except AttributeError:
+            #f = object.__getattribute__(self, 'factory')
+            return getattr(object.__getattribute__(self, 'factory').settings, attr)
 
     def __setattr__(self, attr, value):
-        if attr in persistent_attr:
-            setattr(object.__getattribute__(self, 'factory'), attr, value)
+        if object.__getattribute__(self, 'loaded'):
+            if hasattr(self, attr):
+                object.__setattr__(self, attr, value)
+            else:
+                #f = object.__getattribute__(self, 'factory')
+                #print "factory %r" % f
+                setattr(object.__getattribute__(self, 'factory').settings, attr, value)
         else:
-            object.__setattr__(self, attr, value)      
+            object.__setattr__(self, attr, value)
+    
+#    def init(self):
+#        self.factory = None
+    factory = None
+    loaded = False
+
 
     def connectionMade(self):
-        self._print = self.factory._print
-        #self.config = self.factory.config
-        self.connections = self.factory.connections
+        #self._print = self.factory._print
+        self.loaded = True
+        #self.config = self.factory.settings.config
+        #self.connections = self.factory.settings.connections
         self.connections[self.config['network']] = self
 
-        if not hasattr(self.factory, 'logger'):
+        if not hasattr(self, 'logger'): #Executed on first connect only
             self.config['logevents'] = [s.upper() for s in self.config['logevents']]
             self.logger = IRCLogger(self, self.config.get('logpath'))
             self.loadPlugins()
@@ -1236,15 +1254,20 @@ class BotFactory(protocol.ClientFactory):
     # the class of the protocol to build when new connection is made
     protocol = Bot
 
+    class Settings(object):
+        pass
+    
     def __init__(self, config, connections):
-        self.config = config
-        self.connections = connections
+        self.settings = self.Settings()
+        self.settings.config = config
+        self.settings.connections = connections
+        self.settings._print = self._print
 
     def _print(self, text, output = 'out'):
-        if self.config.get('verbose', True):
+        if self.settings.config.get('verbose', True):
             timestamp = time.strftime("%H:%M:%S")
-            if len(self.config['networks']) > 1:
-                prefix = "[%s][%s] " % (self.config['network'], timestamp)
+            if len(self.settings.config['networks']) > 1:
+                prefix = "[%s][%s] " % (self.settings.config['network'], timestamp)
             else:
                 prefix = "[%s] " % timestamp
             if output == 'err':
@@ -1257,12 +1280,12 @@ class BotFactory(protocol.ClientFactory):
     def clientConnectionLost(self, connector, reason):
         """Attempt to connect to the next server or reconnect to the current
         if we get disconnected."""
-        self._print('Disconnected from %s (%s:%s).' % (self.config.get('network'), self.config['activeserver'][0], self.config['activeserver'][1]))
-        if not self.config.get('reconnect') == False:
-            server = self.config.get('host')
+        self._print('Disconnected from %s (%s:%s).' % (self.settings.config.get('network'), self.settings.config['activeserver'][0], self.settings.config['activeserver'][1]))
+        if not self.settings.config.get('reconnect') == False:
+            server = self.settings.config.get('host')
             if isinstance(server, (tuple, list)):
-                self.config['host'].append(self.config['host'].pop(0))
-                server = self.config['host'][0]
+                self.settings.config['host'].append(self.settings.config['host'].pop(0))
+                server = self.settings.config['host'][0]
                 port = 6667
                 if ':' in server:
                     server, port = server.split(':')
@@ -1272,12 +1295,12 @@ class BotFactory(protocol.ClientFactory):
                         port = port[1:]
                     port = int(port)
 
-                self.config['activeserver'] = (server, port)
+                self.settings.config['activeserver'] = (server, port)
                 connector.host = server
                 connector.port = port
 
             try:
-                rtime = int(self.config.get('reconnect'))
+                rtime = int(self.settings.config.get('reconnect'))
             except (ValueError, TypeError), e:
                 rtime = 10
             self._print('Reconnecting in %s seconds...' % rtime)
