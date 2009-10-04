@@ -96,26 +96,21 @@ class Bot(irc.IRCClient, object):
         else:
             object.__setattr__(self, attr, value)
     
-#    def init(self):
-#        self.factory = None
     factory = None
     loaded = False
 
 
     def connectionMade(self):
-        #self._print = self.factory._print
         self.loaded = True
-        #self.config = self.factory.settings.config
-        #self.connections = self.factory.settings.connections
         self.connections[self.config['network']] = self
 
         if not hasattr(self, 'logger'): #Executed on first connect only
             self.config['logevents'] = [s.upper() for s in self.config['logevents']]
             self.logger = IRCLogger(self, self.config.get('logpath'))
-            self.loadPlugins()
             if not os.path.exists("data"):
                 os.mkdir("data")
 
+        self.loadPlugins()
         self.lastmsg = time.mktime(time.gmtime())
         self.sourceURL = None #Disable source reply.
         self.split = split #Make the split function accessible to plugins
@@ -593,7 +588,7 @@ class Bot(irc.IRCClient, object):
                         report.append('source unknown')
                     self.msg(input.sender, report[0] + ' (' + report[1] + ')')
                 except Exception, e:
-                    self.msg("Got an error: %s" % e)
+                    self.msg(input.sender, "Got an error: %s" % e)
 
     def ctcpQuery_VERSION(self, user, channel, data):
         if self.config.get('versionreply', None):
