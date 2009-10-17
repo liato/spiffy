@@ -17,6 +17,8 @@ from utils import tounicode
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric, split
 from twisted.internet import reactor, protocol
+from twisted.python import threadable
+threadable.init(1)
 
 try:
     import cjson as json # Try loading the fastest lib first.
@@ -153,7 +155,7 @@ class Bot(irc.IRCClient, object):
             #Send PING to the server If no data has been received for 200 seconds.
             if (self.lastmsg+200) < time.mktime(time.gmtime()):
                 self.lastmsg = time.mktime(time.gmtime())
-                self.sendLine("PING YO!")
+                reactor.callFromThread(self.sendLine, "PING YO!")
             time.sleep(200)
 
     def loadPlugins(self):
@@ -532,9 +534,7 @@ class Bot(irc.IRCClient, object):
 
                 input = CommandInput(self, prefix, command, params, text, None, line, func.name)
                 bot = QuickReplyWrapper(self, input)
-                targs = (func, bot, input)
-                t = threading.Thread(target=self.runPlugin, args=targs)
-                t.start()
+                self.runPlugin(func, bot, input)
                 return
         
         for name, regexp in self.plugins_regex.iteritems():
@@ -546,9 +546,7 @@ class Bot(irc.IRCClient, object):
                 
                 input = CommandInput(self, prefix, command, params, text, match, line, func.name)
                 bot = QuickReplyWrapper(self, input)
-                targs = (func, bot, input)
-                t = threading.Thread(target=self.runPlugin, args=targs)
-                t.start()
+                self.runPlugin(func, bot, input)
        
 
     def runPlugin(self, func, bot, input):
