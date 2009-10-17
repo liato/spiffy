@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 import traceback
-import warnings
+#import warnings
 
 from utils import tounicode
 
@@ -950,9 +950,9 @@ class IRCLogger(object):
                     c = RCursor(conn) #conn.cursor()
         
                     # Create a channel index table
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore") #Ignore table exists warnings from MySQL.
-                        c.execute("""CREATE TABLE IF NOT EXISTS spiffy_channels (
+                    #with warnings.catch_warnings():
+                    #    warnings.simplefilter("ignore") #Ignore table exists warnings from MySQL.
+                    c.execute("""CREATE TABLE IF NOT EXISTS spiffy_channels (
                                         `hash` char(39) CHARSET utf8 COLLATE utf8_general_ci,
                                         plaintext text CHARSET utf8 COLLATE utf8_general_ci,
                                         unique `idx_spiffy_channels` (`hash`)
