@@ -1,6 +1,3 @@
-# this will probably raise an exception in Python >= 2.6
-from __future__ import with_statement
-
 import codecs
 import datetime
 import hashlib
@@ -13,7 +10,7 @@ import sys
 import threading
 import time
 import traceback
-#import warnings
+import warnings
 
 from utils import tounicode
 
@@ -62,8 +59,8 @@ def sourcesplit(source):
     return m.groups()
 
 #Rerout the following attributes to the BotFactory object.    
-persistent_attr = ['config', 'logger', 'plugins', 'plugins_nicktriggered',
-                    'doc', 'plugin_aliases', 'plugins_regex']
+#persistent_attr = ['config', 'logger', 'plugins', 'plugins_nicktriggered',
+#                    'doc', 'plugin_aliases', 'plugins_regex']
 
 class Bot(irc.IRCClient, object):
     
@@ -503,6 +500,8 @@ class Bot(irc.IRCClient, object):
                 pass
 
         command = (symbolic_to_numeric.get(command, command), command)
+        #Print all incoming data to stdout:
+        #print line
 
         self.logger.log(prefix, command, params, text) # Needs to be called before _handleChange
         
@@ -542,6 +541,8 @@ class Bot(irc.IRCClient, object):
             match = regexp.match(text)
             if match:
                 func = self.plugins[name]
+                if not func.event in command:
+                    return
                 
                 input = CommandInput(self, prefix, command, params, text, match, line, func.name)
                 bot = QuickReplyWrapper(self, input)
@@ -865,9 +866,11 @@ class ChanList(object):
 
 class RCursor(object):
     """A reconnecting cursor for MySQLdb."""
+   
     def __init__(self, connection): 
         self.connection = connection
         self.cursor = connection.cursor()
+        warnings.filterwarnings("ignore", ".*table.*already exist.*")
 
     def __getattribute__(self, attr):
         try:
@@ -895,7 +898,7 @@ class RCursor(object):
                 return self.cursor.executemany(sql, args)
             raise
 
-class IRCLogger(object):
+class IRCLogger(object):  
 
     def __init__(self, bot, logpath):
         if logpath == None:
@@ -950,13 +953,11 @@ class IRCLogger(object):
                     c = RCursor(conn) #conn.cursor()
         
                     # Create a channel index table
-                    #with warnings.catch_warnings():
-                    #    warnings.simplefilter("ignore") #Ignore table exists warnings from MySQL.
                     c.execute("""CREATE TABLE IF NOT EXISTS spiffy_channels (
-                                        `hash` char(39) CHARSET utf8 COLLATE utf8_general_ci,
-                                        plaintext text CHARSET utf8 COLLATE utf8_general_ci,
-                                        unique `idx_spiffy_channels` (`hash`)
-                                        ) charset=utf8 collate=utf8_general_ci""")
+                                    `hash` char(39) CHARSET utf8 COLLATE utf8_general_ci,
+                                    plaintext text CHARSET utf8 COLLATE utf8_general_ci,
+                                    unique `idx_spiffy_channels` (`hash`)
+                                    ) charset=utf8 collate=utf8_general_ci""")
                     self.mysql_conn = conn
                     self.mysql_curs = c
                     
@@ -1069,19 +1070,17 @@ class IRCLogger(object):
 
             hashname = "spiffy_" + hashlib.md5(tablename.encode("utf-8")).hexdigest()
 
-            # check if a table exists for the current channel.
-            if nick.lower() == self.bot.nickname or not channel.startswith('#'):
-                #with warnings.catch_warnings():
-                #    warnings.simplefilter("ignore")                    
+            # Check if a table exists for the current channel.
+            if ((not channel.startswith('#')) or (channel.startswith('#') and command == "JOIN" and nick.lower() == self.bot.nickname.lower())):                  
                 c.execute("""CREATE TABLE IF NOT EXISTS %s (
-                                    `ts` datetime,
-                                    `prefix` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
-                                    `nick` varchar(50) CHARSET utf8 COLLATE utf8_general_ci,
-                                    `command` varchar(7) CHARSET utf8 COLLATE utf8_general_ci,
-                                    `params` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
-                                    `text` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
-                                    KEY `nick` (`nick`,`command`) 
-                                    ) charset=utf8 collate=utf8_general_ci;""" % hashname)
+                                `ts` datetime,
+                                `prefix` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
+                                `nick` varchar(50) CHARSET utf8 COLLATE utf8_general_ci,
+                                `command` varchar(7) CHARSET utf8 COLLATE utf8_general_ci,
+                                `params` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
+                                `text` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
+                                KEY `nick` (`nick`,`command`) 
+                                ) charset=utf8 collate=utf8_general_ci;""" % hashname)
                 c.execute("INSERT INTO spiffy_channels (hash, plaintext) VALUES (%s, %s) ON DUPLICATE KEY UPDATE hash=hash", (hashname, tablename))
 
             # table has been created if it didn't already exist, so we can do our insertions
