@@ -1071,9 +1071,9 @@ class IRCLogger(object):
 
             # check if a table exists for the current channel.
             if nick.lower() == self.bot.nickname or not channel.startswith('#'):
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")                    
-                    c.execute("""CREATE TABLE IF NOT EXISTS %s (
+                #with warnings.catch_warnings():
+                #    warnings.simplefilter("ignore")                    
+                c.execute("""CREATE TABLE IF NOT EXISTS %s (
                                     `ts` datetime,
                                     `prefix` varchar(512) CHARSET utf8 COLLATE utf8_general_ci,
                                     `nick` varchar(50) CHARSET utf8 COLLATE utf8_general_ci,
