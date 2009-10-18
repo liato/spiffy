@@ -52,7 +52,8 @@ config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
                                     'NOTICE', 'NICK', '332', '333'],
                     'verbose': True, 'reconnect': 10,
                     'logpath': 'logs', 'plugins_exclude': [],
-                    'plugins_include': False, 'timezone': None}
+                    'plugins_include': False, 'timezone': None,
+                    'print_traffic': False}
 
 def sourcesplit(source):
     """Split nick!user@host and return a 3-value tuple."""
@@ -475,6 +476,8 @@ class Bot(irc.IRCClient, object):
             if isinstance(line, unicode):
                 line = line.encode(self.encoding)
         self.transport.write("%s%s%s" % (line, chr(015), chr(012)))
+        if self.config.get('print_traffic', False):
+            self._print('-> ' + line)
 
     def lineReceived(self, line):
         self.lastmsg = time.mktime(time.gmtime())
@@ -502,8 +505,8 @@ class Bot(irc.IRCClient, object):
                 pass
 
         command = (symbolic_to_numeric.get(command, command), command)
-        #Print all incoming data to stdout:
-        #print line
+        if self.config.get('print_traffic', False):
+            self._print('<- ' + line)
 
         self.logger.log(prefix, command, params, text) # Needs to be called before _handleChange
         
@@ -541,12 +544,10 @@ class Bot(irc.IRCClient, object):
             match = regexp.match(text)
             if match:
                 func = self.plugins[name]
-                if not func.event in command:
-                    return
-                
-                input = CommandInput(self, prefix, command, params, text, match, line, func.name)
-                bot = QuickReplyWrapper(self, input)
-                self.runPlugin(func, bot, input)
+                if func.event in command:
+                    input = CommandInput(self, prefix, command, params, text, match, line, func.name)
+                    bot = QuickReplyWrapper(self, input)
+                    self.runPlugin(func, bot, input)
        
 
     def runPlugin(self, func, bot, input):
