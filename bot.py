@@ -618,7 +618,7 @@ class CommandInput(object):
             self.groups = match.groups
             self.command = self.args = text
         else: # plugin uses command list
-            self.command = funcname
+            self.command = text.split(" ",1)[0][len(bot.config['prefix']):]
             self.args = text.split(" ",1)[1] if text.strip().count(" ") > 0 else ""
             
             self.group = lambda i: self.args if i == 2 else text # placeholder until plugins are ported

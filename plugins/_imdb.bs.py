@@ -1,20 +1,47 @@
+import copy
+import htmlentitydefs
 import re
 import urllib2
 
-from lxml.html import parse
+from BeautifulSoup import BeautifulSoup as bs
 
-asciionly = re.compile(r'[^a-zA-Z]')
+# Unescape code by Fredrik Lundh - October 28, 2006
+# http://effbot.org/zone/re-sub.htm#unescape-html
+def _unescape(text):
+    def fixup(m):
+        text = m.group(0)
+        if text[:2] == "&#":
+            # character reference
+            try:
+                if text[:3] == "&#x":
+                    return unichr(int(text[3:-1], 16))
+                else:
+                    return unichr(int(text[2:-1]))
+            except ValueError:
+                pass
+        else:
+            # named entity
+            try:
+                text = unichr(htmlentitydefs.name2codepoint[text[1:-1]])
+            except KeyError:
+                pass
+        return text # leave as is
+    return re.sub("&#?\w+;", fixup, text)
+    
+hexentityMassage = copy.copy(bs.MARKUP_MASSAGE)
+hexentityMassage = [(re.compile('&#x([^;]+);'),
+                     lambda m: '&#%d' % int(m.group(1), 16))]
 
 class imdblib(object):
     class Movie(object):
         def __init__(self, id, fullplot = False):
-            if isinstance(id, int):
+            if isinstance(id,int):
                 id = str(id)
-            m = re.search(r'(?:tt)?(?P<id>\d{7})', id, re.I)
+            m = re.search(r"(?:tt)?(?P<id>\d{7})",id,re.I)
             if m:
-                self.id = m.group('id')
+                self.id = m.group("id")
             else:
-                raise ValueError('Invalid imdb id.')
+                raise ValueError("Invalid imdb id.")
     
             self.title = None
             self.genres = []
@@ -37,12 +64,12 @@ class imdblib(object):
             self.update()
     
     
-        def _infodiv(self, title, find=None):
+        def _infodiv(self, movie, text, find=None, **kw):
             try:
                 if not find:
-                    return self.infodivs[title].text.replace('\n', '').strip()
+                    return movie.find("h5", text=text).parent.parent.contents[2].replace("\n","")
                 else:
-                    return [x.text.replace('\n', '').strip() for x in self.infodivs[title].findall('.//%s' % find)]
+                    return [str(x.string).replace("\n","") for x in movie.find("h5", text=text).parent.parent.findAll(find, **kw)]
                     
             except:
                 if not find:
@@ -52,89 +79,87 @@ class imdblib(object):
     
     
         def update(self):
-            data = urllib2.urlopen('http://www.imdb.com/title/tt%s/' % self.id)
-            movie = parse(data).getroot()
-    
-            self.infodivs = {}
-            asciionly = re.compile(r'[^a-zA-Z]')
-            for e in movie.cssselect('#tn15content div.info'):
-                title = e.find('h5')
-                content = e.find('p')
-                if title is not None and title.text is not None and content is not None:
-                    self.infodivs[asciionly.sub('', title.text).lower()] = content
-            for old, new in (('writer', 'writers'), ('director', 'directors')):
-                if old in self.infodivs:
-                    self.infodivs[new] = self.infodivs[old]
-    
-            try:
-                self.title = movie.find('head').find('title').text
-            except:
-                self.title = 'Unknown title'
-    
-            year = re.search(r'\((?P<year>\d{4})\)$', self.title)
+            data = urllib2.urlopen("http://www.imdb.com/title/tt%s/" % self.id)
+            movie = bs(data.read(), convertEntities=bs.HTML_ENTITIES, markupMassage=hexentityMassage)
+            self.title = movie.head.title.string
+            year = re.search(r"\((?P<year>\d{4})\)$",self.title)
             if year:
-                self.year = year.group('year')
-                self.title = re.sub(r'\s\(\d{4}\)$', '', self.title)
+                self.year = year.group("year")
+                self.title = re.sub(r"\s\(\d{4}\)$","",self.title)
             
-            if 'directors' in self.infodivs:
-                self.directors = [x.text for x in self.infodivs['directors'].findall('.//a')]
-            
-            if 'genre' in self.infodivs:
-                self.genres = [x.text for x in self.infodivs['genre'].findall('.//a') if '/Sections' in x.attrib.get('href')]
             try:
-                rating = html.get_element_by_id('tn15rating')
-                if rating is not None:
-                    self.rating = rating.cssselect('div .meta b')[0].text
-                    self.votes = rating.cssselect('div .meta a')[0].text
-                    top = rating.cssselect('div .bottom a')
-                    if top:
-                        self.top = top[0].text
+                self.directors = [d.string for d in movie.find(id="director-info").findAll("a")]
+            except:
+                self.directors = []
+            
+            self.directors = []
+                
+            self.genres = self._infodiv(movie, "Genre:", find="a", href=re.compile("/Sections/"))
+            try:
+                self.rating = movie.find("div", "general rating").find("div", "meta").b.string
+                self.votes = movie.find("div", "general rating").find("div", "meta").a.string
             except:
                 self.rating = None
-                self.votes = 'No votes'
-                self.top = None
-            
-    
-            self.plot = self._infodiv('plot')
-            self.tagline = self._infodiv('tagline')
-            self.release = self._infodiv('releasedate')
-            self.usercomment = self._infodiv('usercomments')
-            self.runtime = self._infodiv('runtime')
-            self.countries = self._infodiv('country', find='a')
-            self.languages = self._infodiv('language', find='a')
-            self.cast = []
-            for x in movie.cssselect('table.cast tr'):
-                name = x.cssselect('.nm a') or x.cssselect('.nm')
-                if name:
-                    name = name[0].text.strip()
-                
-                character = x.cssselect('.char a') or x.cssselect('.char')
-                if character:
-                    character = character[0].text.strip()
-    
-                if name and character:
-                    self.cast.append((name, character))
+                self.votes = "No votes"
             
             try:
-                self.posterurl = movie.cssselect('div.photo img')[0].get('src')
-                if 'title_addposter' in self.posterurl:
+                self.top = "%s" % movie.find("div", "general rating").find("div", "bottom").div.a.string
+            except:
+                self.top = None
+            self.plot = self._infodiv(movie, "Plot:")
+            self.tagline = self._infodiv(movie, "Tagline:")
+            self.release = self._infodiv(movie, "Release Date:")
+            self.usercomment = self._infodiv(movie, "User Comments:")
+            self.runtime = self._infodiv(movie, "Runtime:")
+            self.countries = self._infodiv(movie, "Country:", find="a")
+            self.languages = self._infodiv(movie, "Language:", find="a")
+            self.cast = []
+            for n in movie.find("table", "cast").findAll("tr"):
+                try:
+                    id = dict(n.contents[1].a.attrs).get("href","")
+                    m = re.search(r"(?P<id>nm\d{7})",id)
+                    if m:
+                        id = m.group("id")
+                    else:
+                        id = "nm0000000"
+                    try:
+                        name = n.contents[1].a.string
+                    except AttributeError:
+                        name = n.contents[1].string
+    
+                    try:                    
+                        cname = n.contents[3]
+                        cname = repr(cname)
+                        cname = cname.decode('utf8') #cname.decode(movie.originalEncoding)
+                        cname = re.sub(r"<[^>]+>", u"", cname)
+                    except:
+                        cname = ""
+                        
+                    self.cast.append((id, name, cname))
+                except Exception:
+                    pass
+            
+            try:
+                self.posterurl = dict(movie.find("div","photo").a.img.attrs)["src"]
+                if "title_noposter" in self.posterurl:
                     self.posterurl = None
             except (TypeError, KeyError):
-                self.posterurl = None
+                pass
     
             if self.fullplot:            
                 data = urllib2.urlopen("http://www.imdb.com/title/tt%s/plotsummary" % self.id)
-                movie = parse(data).getroot()
+                movie = bs(data.read(), convertEntities=bs.HTML_ENTITIES, markupMassage=hexentityMassage)
                 try:
-                    self.fullplot = movie.cssselect('p.plotpar')[0].text.strip()
+                    self.fullplot = movie.find(id="tn15content").find("p","plotpar").contents[0].strip()
                 except AttributeError:
-                    pass    
+                    pass
     
-    class Name(object):
+    
+    class Name:
         def __init__(self, id):
-            if isinstance(id, int):
+            if isinstance(id,int):
                 id = str(id)
-            m = re.search(r"(?:nm)?(?P<id>\d{7})", id, re.I)
+            m = re.search(r"(?:nm)?(?P<id>\d{7})",id,re.I)
             if m:
                 self.id = m.group("id")
             else:
@@ -153,12 +178,12 @@ class imdblib(object):
             self.update()
     
     
-        def _infodiv(self, title, find=None):
+        def _infodiv(self, movie, text, find=None, **kw):
             try:
                 if not find:
-                    return self.infodivs[title].text.replace('\n', '').strip()
+                    return movie.find("h5", text=text).parent.parent.contents[2].replace("\n","")
                 else:
-                    return [x.text.replace('\n', '').strip() for x in self.infodivs[title].findall('.//%s' % find)]
+                    return [str(x.string).replace("\n","") for x in movie.find("h5", text=text).parent.parent.findAll(find, **kw)]
                     
             except:
                 if not find:
@@ -168,49 +193,38 @@ class imdblib(object):
     
     
         def update(self):
-            data = urllib2.urlopen('http://www.imdb.com/name/nm%s/' % self.id)
-            movie = parse(data).getroot()
-    
-            self.infodivs = {}
-            asciionly = re.compile(r'[^a-zA-Z]')
-            for e in movie.cssselect('#tn15content div.info'):
-                title = e.find('h5')
-                content = e.find('p')
-                if title is not None and title.text is not None and content is not None:
-                    self.infodivs[asciionly.sub('', title.text).lower()] = content
-            for old, new in (('writer', 'writers'), ('director', 'directors')):
-                if old in self.infodivs:
-                    self.infodivs[new] = self.infodivs[old]
-    
-            try:
-                self.name = movie.find('head').find('title').text
-            except:
-                self.name = 'Unknown name'
-                
-            self.birthdate = ' '.join(self._infodiv('dateofbirth', find='a')[:2])
-            try:
-                self.birthplace = self._infodiv('dateofbirth', find='a')[2]
-            except Exception:
-                pass
-            self.deathdate = ' '.join(self._infodiv('dateofdeath', find='a')[:2])
-            self.biography = self._infodiv('minibiography')
-            self.trivia = self._infodiv('trivia')
-            self.awards = self._infodiv('awards')
+            data = urllib2.urlopen("http://www.imdb.com/name/nm%s/" % self.id)
+            movie = bs(data.read(), convertEntities=bs.HTML_ENTITIES, markupMassage=hexentityMassage)
+            self.name = movie.head.title.string
+            self.birthdate = " ".join(self._infodiv(movie,"Date of Birth:", find="a", href=re.compile(r"onthisday|borninyear", re.I)))
+            self.birthplace = "".join(self._infodiv(movie,"Date of Birth:", find="a", href=re.compile(r"bornwhere", re.I)))
+            self.deathdate = " ".join(self._infodiv(movie,"Date of Death:", find="a", href=re.compile(r"onthisday|diedinyear", re.I)))
+            self.biography = self._infodiv(movie,"Mini Biography:")
+            self.trivia = self._infodiv(movie,"Trivia:")
+            self.awards = self._infodiv(movie,"Awards:")
             if self.awards:
-                self.awards = re.sub(r'\s+', ' ', self.awards.strip())
-            self.altnames = self._infodiv('alternatenames')
+                self.awards = re.sub(r"\s+", " ", self.awards.strip())
+            self.altnames = self._infodiv(movie,"Alternate Names:")
      
+            self.filmography = []
+            for x in movie.findAll("div", "filmo"):
+                try:
+                    title = x.find("h5").a.string.replace(":","")
+                except Exception:
+                    title = ""
+                for n in x.find("ol").findAll("li"):
+                    n = repr(n)
+                    n = n.decode('utf8')
+                    m = re.search(r'<a[^>]*href="/title/(?P<id>tt\d{7})/"[^>]*>(?P<name>[^<]*?)</a>.*\)', n, re.I)
+                    if m:
+                        self.filmography.append((m.group("name"), title))
+            
             try:
-                self.photourl =  movie.cssselect('div.photo img')[0].get('src')
+                self.photourl = dict(movie.find("div","photo").a.img.attrs)["src"]
                 if "nophoto" in self.photourl:
                     self.photourl = None
             except TypeError,KeyError:
-                self.photourl = None
-    
-            data = urllib2.urlopen('http://www.imdb.com/name/nm%s/filmorate' % self.id)
-            movie = parse(data).getroot()
-    
-            self.filmography = [x.text for x in movie.cssselect('.filmo li > a')]
+                pass
     
     
     class Search:
