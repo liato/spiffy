@@ -309,7 +309,7 @@ def imdb(self, input):
         if name.trivia: self.say("\x02Trivia:\x02 %s" % name.trivia)
         if name.awards: self.say("\x02Awards:\x02 %s" % name.awards)
         if name.altnames: self.say("\x02Alternative names:\x02 %s" % name.altnames)
-        if name.filmography: self.say("\x02Filmography:\x02 %s" % ", ".join([x+" ("+y+")" for x, y in name.filmography[:5]]))
+        if name.filmography: self.say("\x02Filmography:\x02 %s" % ", ".join(name.filmography[:5]))
 
     else:
         if options.rating or options.rating_url:
@@ -358,7 +358,7 @@ def imdb(self, input):
                 if movie.countries: self.say("\x02Country:\x02 %s" % ", ".join(movie.countries))
                 if movie.languages: self.say("\x02Language:\x02 %s" % ", ".join(movie.languages))
                 if movie.usercomment: self.say("\x02User comments:\x02 %s" % movie.usercomment)
-                if movie.cast: self.say("\x02Cast:\x02 %s" % ", ".join([name+" as "+cname for id, name, cname in movie.cast[:5]]))
+                if movie.cast: self.say("\x02Cast:\x02 %s" % ", ".join([name+" as "+cname for name, cname in movie.cast[:5]]))
 
 imdb.rule = ["mdb", "imdb"]
 imdb.usage = [("Display information about a movie or tv show", "$pcmd <title>"),
