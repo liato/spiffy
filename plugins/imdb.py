@@ -56,10 +56,9 @@ class imdblib(object):
             movie = parse(data).getroot()
     
             self.infodivs = {}
-            asciionly = re.compile(r'[^a-zA-Z]')
             for e in movie.cssselect('#tn15content div.info'):
                 title = e.find('h5')
-                content = e.find('p')
+                content = e.find('div')
                 if title is not None and title.text is not None and content is not None:
                     self.infodivs[asciionly.sub('', title.text).lower()] = content
             for old, new in (('writer', 'writers'), ('director', 'directors')):
@@ -172,10 +171,9 @@ class imdblib(object):
             movie = parse(data).getroot()
     
             self.infodivs = {}
-            asciionly = re.compile(r'[^a-zA-Z]')
             for e in movie.cssselect('#tn15content div.info'):
                 title = e.find('h5')
-                content = e.find('p')
+                content = e.find('div')
                 if title is not None and title.text is not None and content is not None:
                     self.infodivs[asciionly.sub('', title.text).lower()] = content
             for old, new in (('writer', 'writers'), ('director', 'directors')):
@@ -272,56 +270,26 @@ class imdblib(object):
                 if m:
                     self.result = m.group(1)
                     break
-
-def imdb(self, input):
-    """Get information about a movie, tv show or actor."""
-    cmd = input.args
     
-    parser = self.OptionParser()
-    parser.add_option("-r", "--rating", dest="rating", action="store_true", default=False)
-    parser.add_option("-R", "--RATING", dest="rating_url", action="store_true", default=False)
-    parser.add_option("-n", "-p", "--name", "--person", dest="person", action="store_true", default=False)
-    (options, args) = parser.parse_args(cmd.split())
-
-    if not args:
-        raise self.BadInputError("A query is required.")
+    def imdb(self, input):
+        """Get information about a movie, tv show or actor."""
+        cmd = input.args
+        
+        parser = self.OptionParser()
+        parser.add_option("-r", "--rating", dest="rating", action="store_true", default=False)
+        parser.add_option("-R", "--RATING", dest="rating_url", action="store_true", default=False)
+        parser.add_option("-n", "-p", "--name", "--person", dest="person", action="store_true", default=False)
+        (options, args) = parser.parse_args(cmd.split())
     
-    query = " ".join(args)
-    if options.person:
-        try:
-            id = imdblib.Search(query, name=True).result
-            if id:
-                name = imdblib.Name(id)
-            else:
-                self.say("Your search for \x02%s\x02 did not return any results." % query)
-                return
-        except urllib2.HTTPError:
-            self.say("Your search for \x02%s\x02 did not return any results." % query)
-            return
-        except IOError:
-            self.say("Error: A connection to IMDB could not be established.")
-            
-        self.say("\x02%s\x02 - [ \x1f%s\x1f ]" % (name.name, "http://www.imdb.com/name/nm"+name.id))
-        if name.birthdate or name.birthplace:
-            self.say("\x02Born:\x02 %s" % (name.birthdate or "")+(name.birthplace and " in "+name.birthplace))
-        if name.deathdate: self.say("\x02Died:\x02 %s" % name.deathdate)
-        if name.biography: self.say("\x02Biography:\x02 %s" % name.biography)
-        if name.trivia: self.say("\x02Trivia:\x02 %s" % name.trivia)
-        if name.awards: self.say("\x02Awards:\x02 %s" % name.awards)
-        if name.altnames: self.say("\x02Alternative names:\x02 %s" % name.altnames)
-        if name.filmography: self.say("\x02Filmography:\x02 %s" % ", ".join(name.filmography[:5]))
-
-    else:
-        if options.rating or options.rating_url:
-            queries = query.split(",")
-        else:
-            queries = [query]
-        for query in queries:
-            query = query.strip()
+        if not args:
+            raise self.BadInputError("A query is required.")
+        
+        query = " ".join(args)
+        if options.person:
             try:
-                id = imdblib.Search(query)
-                if id.result:
-                    movie = imdblib.Movie(id.result)
+                id = imdblib.Search(query, name=True).result
+                if id:
+                    name = imdblib.Name(id)
                 else:
                     self.say("Your search for \x02%s\x02 did not return any results." % query)
                     return
@@ -330,35 +298,65 @@ def imdb(self, input):
                 return
             except IOError:
                 self.say("Error: A connection to IMDB could not be established.")
-            
-
-            if options.rating_url:
-                if movie.rating:
-                    self.say("\x02%s%s\x02:  %s (%s) %s - [ \x1f%s\x1f ]" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", movie.rating, movie.votes, movie.top and "["+movie.top+"]" or "", "http://www.imdb.com/title/tt"+movie.id))
-                else:
-                    self.say("\x02%s%s\x02 is not yet rated. - [ \x1f%s\x1f ]" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", "http://www.imdb.com/title/tt"+movie.id))
-
-
-            elif options.rating:
-                if movie.rating:
-                    self.say("\x02%s%s\x02:  %s (%s) %s" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", movie.rating, movie.votes, movie.top and "["+movie.top+"]" or ""))
-                else:
-                    self.say("\x02%s%s\x02 is not yet rated." % (movie.title, movie.year and " ("+str(movie.year)+")" or "",))
-
-
+                
+            self.say("\x02%s\x02 - [ \x1f%s\x1f ]" % (name.name, "http://www.imdb.com/name/nm"+name.id))
+            if name.birthdate or name.birthplace:
+                self.say("\x02Born:\x02 %s" % (name.birthdate or "")+(name.birthplace and " in "+name.birthplace))
+            if name.deathdate: self.say("\x02Died:\x02 %s" % name.deathdate)
+            if name.biography: self.say("\x02Biography:\x02 %s" % name.biography)
+            if name.trivia: self.say("\x02Trivia:\x02 %s" % name.trivia)
+            if name.awards: self.say("\x02Awards:\x02 %s" % name.awards)
+            if name.altnames: self.say("\x02Alternative names:\x02 %s" % name.altnames)
+            if name.filmography: self.say("\x02Filmography:\x02 %s" % ", ".join(name.filmography[:5]))
+    
+        else:
+            if options.rating or options.rating_url:
+                queries = query.split(",")
             else:
-                self.say("\x02%s%s\x02 - [ \x1f%s\x1f ]" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", "http://www.imdb.com/title/tt"+movie.id))
-                if movie.directors: self.say("\x02Director:\x02 %s" % ", ".join(movie.directors))
-                if movie.genres: self.say("\x02Genre:\x02 %s" % ", ".join(movie.genres))
-                if movie.rating: self.say("\x02Rating:\x02 %s (%s) %s" % (movie.rating, movie.votes, movie.top and "["+movie.top+"]" or ""))
-                if movie.plot: self.say("\x02Plot:\x02 %s" % movie.plot)
-                if movie.tagline: self.say("\x02Tagline:\x02 %s" % movie.tagline)
-                if movie.release: self.say("\x02Release:\x02 %s" % movie.release)
-                if movie.runtime: self.say("\x02Runtime:\x02 %s" % movie.runtime)
-                if movie.countries: self.say("\x02Country:\x02 %s" % ", ".join(movie.countries))
-                if movie.languages: self.say("\x02Language:\x02 %s" % ", ".join(movie.languages))
-                if movie.usercomment: self.say("\x02User comments:\x02 %s" % movie.usercomment)
-                if movie.cast: self.say("\x02Cast:\x02 %s" % ", ".join([name+" as "+cname for name, cname in movie.cast[:5]]))
+                queries = [query]
+            for query in queries:
+                query = query.strip()
+                try:
+                    id = imdblib.Search(query)
+                    if id.result:
+                        movie = imdblib.Movie(id.result)
+                    else:
+                        self.say("Your search for \x02%s\x02 did not return any results." % query)
+                        return
+                except urllib2.HTTPError:
+                    self.say("Your search for \x02%s\x02 did not return any results." % query)
+                    return
+                except IOError:
+                    self.say("Error: A connection to IMDB could not be established.")
+                
+    
+                if options.rating_url:
+                    if movie.rating:
+                        self.say("\x02%s%s\x02:  %s (%s) %s - [ \x1f%s\x1f ]" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", movie.rating, movie.votes, movie.top and "["+movie.top+"]" or "", "http://www.imdb.com/title/tt"+movie.id))
+                    else:
+                        self.say("\x02%s%s\x02 is not yet rated. - [ \x1f%s\x1f ]" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", "http://www.imdb.com/title/tt"+movie.id))
+    
+    
+                elif options.rating:
+                    if movie.rating:
+                        self.say("\x02%s%s\x02:  %s (%s) %s" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", movie.rating, movie.votes, movie.top and "["+movie.top+"]" or ""))
+                    else:
+                        self.say("\x02%s%s\x02 is not yet rated." % (movie.title, movie.year and " ("+str(movie.year)+")" or "",))
+    
+    
+                else:
+                    self.say("\x02%s%s\x02 - [ \x1f%s\x1f ]" % (movie.title, movie.year and " ("+str(movie.year)+")" or "", "http://www.imdb.com/title/tt"+movie.id))
+                    if movie.directors: self.say("\x02Director:\x02 %s" % ", ".join(movie.directors))
+                    if movie.genres: self.say("\x02Genre:\x02 %s" % ", ".join(movie.genres))
+                    if movie.rating: self.say("\x02Rating:\x02 %s (%s) %s" % (movie.rating, movie.votes, movie.top and "["+movie.top+"]" or ""))
+                    if movie.plot: self.say("\x02Plot:\x02 %s" % movie.plot)
+                    if movie.tagline: self.say("\x02Tagline:\x02 %s" % movie.tagline)
+                    if movie.release: self.say("\x02Release:\x02 %s" % movie.release)
+                    if movie.runtime: self.say("\x02Runtime:\x02 %s" % movie.runtime)
+                    if movie.countries: self.say("\x02Country:\x02 %s" % ", ".join(movie.countries))
+                    if movie.languages: self.say("\x02Language:\x02 %s" % ", ".join(movie.languages))
+                    if movie.usercomment: self.say("\x02User comments:\x02 %s" % movie.usercomment)
+                    if movie.cast: self.say("\x02Cast:\x02 %s" % ", ".join([name+" as "+cname for name, cname in movie.cast[:5]]))
 
 imdb.rule = ["mdb", "imdb"]
 imdb.usage = [("Display information about a movie or tv show", "$pcmd <title>"),
