@@ -560,7 +560,8 @@ class Bot(irc.IRCClient, object):
                     return
 
         try:
-            func(bot, input)
+            #func(bot, input)
+            reactor.callWhenRunning(func, bot, input)
         except self.BadInputError, e:
             if input.sender:
                 if e.value:
