@@ -16,7 +16,7 @@ from utils import tounicode
 
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric, split
-from twisted.internet import reactor, protocol
+from twisted.internet import reactor, protocol, threads
 from twisted.python import threadable
 threadable.init(1)
 
@@ -560,8 +560,7 @@ class Bot(irc.IRCClient, object):
                     return
 
         try:
-            #func(bot, input)
-            reactor.callWhenRunning(func, bot, input)
+            threads.deferToThread(func, bot, input)
         except self.BadInputError, e:
             if input.sender:
                 if e.value:
