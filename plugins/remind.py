@@ -217,7 +217,7 @@ def removeremind(self,id):
 def tryremind(self,id,sender,receiver,message,time,chan):
     if self.bot.chanlist.ison(receiver, chan):
         timestr = time.strftime("%Y-%m-%d %H:%M:%S")
-        reactor.callFromThread(self.msg, (chan, u"%s: At %s, %s asked me to tell you: %s" % (receiver, timestr, (receiver.lower() != sender.lower() and sender or 'you'), message)))
+        reactor.callFromThread(self.msg, chan, u"%s: At %s, %s asked me to tell you: %s" % (receiver, timestr, (receiver.lower() != sender.lower() and sender or 'you'), message))
         removeremind(self,id)
     else:
         removeremind(self,id)
