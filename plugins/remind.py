@@ -4,6 +4,8 @@ import re
 import sqlite3
 from threading import Timer
 
+from twisted.internet import reactor
+
 from parsedatetime import parsedatetime as pdt
 
 def setup(self):
@@ -214,14 +216,9 @@ def removeremind(self,id):
     conn.close()
 
 def tryremind(self,id,sender,receiver,message,time,chan):
-
-    rawsay = lambda message: self.msg(chan, message)
     if self.bot.chanlist.ison(receiver, chan):
         timestr = time.strftime("%Y-%m-%d %H:%M:%S")
-        if receiver.lower() != sender.lower():
-            rawsay(u"%s: At %s, %s asked me to tell you: %s" % (receiver, timestr, sender, message))
-        else:
-            rawsay(u"%s: At %s, you asked me to tell you: %s" % (receiver, timestr, message))
+        reactor.callFromThread(self.msg, (chan, u"%s: At %s, %s asked me to tell you: %s" % (receiver, timestr, (receiver.lower() != sender.lower() and sender or 'you'), message)))
         removeremind(self,id)
     else:
         removeremind(self,id)
