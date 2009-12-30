@@ -155,7 +155,7 @@ def tell(self,input):
     else:
         tellee = [tellee]
 
-    ids = [savetell(self,teller,(t == "me" and tellee or t),msg,time) for t in tellee]
+    ids = [savetell(self,teller,(t == "me" and teller or t),msg,time) for t in tellee]
 
     if hasattr(self.bot,"tells"):
         for id,t in zip(ids,tellee):
