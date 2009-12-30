@@ -159,11 +159,11 @@ def tell(self,input):
 
     if hasattr(self.bot,"tells"):
         for id,t in zip(ids,tellee):
-            self.bot.tells.setdefault(t,[]).append((id,teller,(t == "me" and tellee or t),msg,time))
+            self.bot.tells.setdefault(t,[]).append((id,teller,(t == "me" and teller or t),msg,time))
     else:
         self.bot.tells = {}
         for id,t in zip(ids,tellee):
-            self.bot.tells.setdefault(t,[]).append((id,teller,(t == "me" and tellee or t),msg,time))
+            self.bot.tells.setdefault(t,[]).append((id,teller,(t == "me" and teller or t),msg,time))
         self.say("FYI, something funky has probably happened, self.bot.tells didn't exist.")
         
     self.say("%s: I'll pass that along!" % teller)
