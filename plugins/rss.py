@@ -9,6 +9,7 @@ import urllib2
 from utils import decodehtml, removehtml
 
 import feedparser
+from twisted.internet import reactor
 
 
 class RSS:
@@ -103,15 +104,14 @@ def checksites(self, pattern=None, savefunc=None):
                 if res:
                     res.reverse()
                     for entry in res:
-                        self.sendLine("PRIVMSG " + site.chan + " :[RSS] \x02%s\x02 - \x1f%s" % (entry.get('title', ''), entry.get('link', '')))
+                        reactor.callFromThread(self.msg, site.chan, "[RSS] \x02%s\x02 - \x1f%s" % (entry.get('title', ''), entry.get('link', '')))
                         msg = entry.get('description', '')
                         msg = re.sub("<br\s?/?>", "\n", msg)
                         msg = removehtml(msg).split("\n")
-                        for line in msg:
-                            self.sendLine("PRIVMSG %s :%s" % (site.chan, line))
+                        reactor.callFromThread(self.msg, site.chan, msg)
                         
             except Exception, e:
-                self.sendLine("PRIVMSG " + site.chan + " :\x02RSS:\x02 Error while checking %s. (%s)!" % (site.url, e))
+                reactor.callFromThread(self.msg, site.chan, "\x02RSS:\x02 Error while checking %s. (%s)!" % (site.url, e))
                 
     if not savefunc:        
         savedb(self.rss_filename, self.rss_db)
@@ -158,8 +158,7 @@ def rss(self, input):
                     msg = entry.get('description', '')
                     msg = re.sub("<br\s?/?>", "\n", msg)
                     msg = removehtml(msg).split("\n")[:3] # print max 3 lines of description
-                    for line in msg:
-                        self.say(line)
+                    self.say(msg)
 
     elif options.check:
         checksites(self, options.check)

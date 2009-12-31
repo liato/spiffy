@@ -21,17 +21,12 @@ from twisted.python import threadable
 threadable.init(1)
 
 try:
-    import cjson as json # Try loading the fastest lib first.
-    json.dumps = json.encode
-    json.loads = json.decode
+    import json # Available in python >= 2.6.
 except ImportError:
     try:
-        import json # Available in python >= 2.6.
+        import simplejson as json # If no json library is found logging to sqlite and mysql will be disabled.
     except ImportError:
-        try:
-            import simplejson as json # If no json library is found logging to sqlite and mysql will be disabled.
-        except ImportError:
-            json = None
+        json = None
             
 try:
     import MySQLdb

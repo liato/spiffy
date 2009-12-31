@@ -4,9 +4,8 @@ import re
 import sqlite3
 from threading import Timer
 
-from twisted.internet import reactor
-
 from parsedatetime import parsedatetime as pdt
+from twisted.internet import reactor
 
 def setup(self):
     self.tells = {}
