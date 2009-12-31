@@ -48,7 +48,7 @@ config_defaults = {'nick': 'spiffy', 'prefix': r'!', 'chandebug': True,
                     'verbose': True, 'reconnect': 10,
                     'logpath': 'logs', 'plugins_exclude': [],
                     'plugins_include': False, 'timezone': None,
-                    'print_traffic': False}
+                    'print_traffic': False, 'silent': False}
 
 def sourcesplit(source):
     """Split nick!user@host and return a 3-value tuple."""
@@ -546,7 +546,7 @@ class Bot(irc.IRCClient, object):
        
 
     def runPlugin(self, func, bot, input):
-        if hasattr(func, 'usage'):
+        if hasattr(func, 'usage') and not self.config.get('silent', False):
             if input.args.split(' ',1)[0] in ('-h', '--help'):
                 if func.name in bot.doc:
                     for e in bot.doc[func.name]:
@@ -557,7 +557,7 @@ class Bot(irc.IRCClient, object):
         try:
             threads.deferToThread(func, bot, input)
         except self.BadInputError, e:
-            if input.sender:
+            if input.sender and not self.config.get('silent', False):
                 if e.value:
                     self.msg(input.sender, "\x02Error:\x02 %s" % e.value)
                 if self.doc[func.__name__][1]:
@@ -566,7 +566,7 @@ class Bot(irc.IRCClient, object):
                     self.msg(input.sender, 'Use %shelp %s for more info on how to use this command.'
                              % (self.config.get('prefix',''), func.__name__))
         except Exception, e:
-            if self.config.get('chandebug', True) and input.sender:
+            if self.config.get('chandebug', True) and input.sender and not self.config.get('silent', False):
                 try:  
                     import traceback
                     trace = traceback.format_exc()
