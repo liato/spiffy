@@ -34,7 +34,7 @@ user = 'spiffy'
 #
 # password - The password sent to the server when connecting
 #
-#    Most servers don't require a password, it's probably safe
+#    Most servers don't require a password, it's probably safe to set
 #    the password to None.
 #
 
@@ -120,6 +120,20 @@ prefix = '!'
 
 chandebug = True
 
+#
+# silent - Make the bot act like an observer
+#
+#    This option essentially disables any error messages (even user invoked)
+#    and makes the bot look like a regular user.
+#
+#    Note that setting this option to True supresses error printing even if
+#    chandebug is set to True. This option also disables the -h switch for
+#    all plugins.
+#
+#    The default setting is to enable error printing:
+
+silent = False
+
 #                                                                    #
 #-#-#-#-#-#-#-#-#-#-#-#-##-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
@@ -148,7 +162,7 @@ plugins_exclude = []
 #    the filenames in plugins_include.
 #    Note that this setting takes precedence over all other plugins
 #    settings.
-#    If not file extension is specified '.py' is assumed.
+#    If no file extension is specified '.py' is assumed.
 #    Don't load any plugins:
 #        plugins_include = []
 #
