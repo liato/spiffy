@@ -1029,7 +1029,7 @@ class IRCLogger(object):
         elif command == "MODE":
             return (params[0].lower(), nick, "%s * %s sets mode: %s\r\n" % (timestamp, nick, " ".join(params[1:])))
         elif command == "NICK":
-            return (None, nick, "%s * %s is now known as %s\r\n" % (timestamp, nick, params[0]))
+            return (None, nick, "%s * %s is now known as %s\r\n" % (timestamp, nick, (text or params[0])))
         elif command == "QUIT":
             return (None, nick, "%s * %s %s\r\n" % (timestamp, nick, "(%s@%s) Quit (%s)" % (user, host, text)))
         elif command == "332":
