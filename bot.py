@@ -744,7 +744,7 @@ class ChanList(object):
             if chan in self.channels:
                 if nick == self.bot.nickname.lower():
                     #Remove channel from userlist when the bot parts a channel
-                    del self.self.channels[chan]
+                    del self.channels[chan]
                 elif nick in self.channels[chan]['users']:
                     del self.channels[chan]['users'][nick]                    
 
