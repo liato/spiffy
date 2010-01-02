@@ -110,6 +110,7 @@ class Bot(irc.IRCClient, object):
         self.sourceURL = None #Disable source reply.
         self.split = split #Make the split function accessible to plugins
         self.encoding = 'utf-8'
+        self.password = self.config.get('password', None)
 
 
         if isinstance(self.config['nick'], (list, tuple)):
