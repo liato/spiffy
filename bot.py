@@ -56,10 +56,6 @@ def sourcesplit(source):
     m = r.match(source)
     return m.groups()
 
-#Rerout the following attributes to the BotFactory object.    
-#persistent_attr = ['config', 'logger', 'plugins', 'plugins_nicktriggered',
-#                    'doc', 'plugin_aliases', 'plugins_regex']
-
 class Bot(irc.IRCClient, object):
     
     class BadInputError(Exception):
@@ -68,16 +64,12 @@ class Bot(irc.IRCClient, object):
         def __str__(self):
             return repr(self.value)
 
-    #def __getattribute__(self, attr):
-    #    if attr in persistent_attr:
-    #        return getattr(object.__getattribute__(self, 'factory'), attr)
-    #    else:
-    #        return object.__getattribute__(self, attr)
+    # After the bot has connected all attributes will be stored in the
+    # botfactory.
     def __getattribute__(self, attr):
         try:
             return object.__getattribute__(self, attr)
         except AttributeError:
-            #f = object.__getattribute__(self, 'factory')
             return getattr(object.__getattribute__(self, 'factory').settings, attr)
 
     def __setattr__(self, attr, value):
@@ -85,8 +77,6 @@ class Bot(irc.IRCClient, object):
             if hasattr(self, attr):
                 object.__setattr__(self, attr, value)
             else:
-                #f = object.__getattribute__(self, 'factory')
-                #print "factory %r" % f
                 setattr(object.__getattribute__(self, 'factory').settings, attr, value)
         else:
             object.__setattr__(self, attr, value)
@@ -733,7 +723,7 @@ class ChanList(object):
             if chan in self.channels:
                 if nick == self.bot.nickname.lower():
                     #Remove channel from userlist when the bot is kicked from the channel.
-                    del self.self.channels[chan]
+                    del self.channels[chan]
                 elif nick in self.channels[chan]['users']:
                     del self.channels[chan]['users'][nick]
 

@@ -11,7 +11,24 @@ connections = {}
 if __name__ == '__main__':
     if sys.version_info < (2, 5): 
         print >> sys.stderr, 'Error: Requires Python 2.5 or later, from www.python.org'
-        sys.exit(1)    
+        sys.exit(1)
+    
+    pidfile = "spiffy.pid"
+
+    try:
+            pf = file(pidfile,'r')
+            pid = int(pf.read().strip())
+            pf.close()
+    except IOError:
+            pid = None
+
+    if pid:
+            print >> sys.stderr, "Pidfile (%s) already exists. Is spiffy already running?" % pidfile
+            sys.exit(1)
+
+    
+    pid = os.getpid()
+    file(pidfile,'w+').write("%s" % pid)
 
     config_name = os.path.join(sys.path[0], 'config.py')
     if not os.path.isfile(config_name):
@@ -58,6 +75,8 @@ if __name__ == '__main__':
                 else:
                     reactor.connectTCP(server, port or 6667, BotFactory(serverconfig, connections))
         reactor.run()
+        if os.path.exists(pidfile):
+            os.remove(pidfile)
 
     else:
         print >> sys.stderr, "Error: No networks to connect to."
