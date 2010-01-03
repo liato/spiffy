@@ -158,7 +158,7 @@ def rss(self, input):
                     msg = entry.get('description', '')
                     msg = re.sub("<br\s?/?>", "\n", msg)
                     msg = removehtml(msg).split("\n")[:3] # print max 3 lines of description
-                    self.say(msg)
+                    self.say("\n".join(msg))
 
     elif options.check:
         checksites(self, options.check)
