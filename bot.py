@@ -758,7 +758,7 @@ class ChanList(object):
         #NICK
         elif command == "nick":
             nick = nick.lower()
-            newnick = params[0]
+            newnick = text or params[0]
             for chan in self.channels:
                 if nick in self.channels[chan]['users']:
                     self.channels[chan]['users'][newnick.lower()] = self.channels[chan]['users'][nick]

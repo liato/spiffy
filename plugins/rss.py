@@ -107,7 +107,7 @@ def checksites(self, pattern=None, savefunc=None):
                         reactor.callFromThread(self.msg, site.chan, "[RSS] \x02%s\x02 - \x1f%s" % (entry.get('title', ''), entry.get('link', '')))
                         msg = entry.get('description', '')
                         msg = re.sub("<br\s?/?>", "\n", msg)
-                        msg = removehtml(msg).split("\n")
+                        msg = removehtml(msg)
                         reactor.callFromThread(self.msg, site.chan, msg)
                         
             except Exception, e:
