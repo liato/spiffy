@@ -17,7 +17,11 @@ if __name__ == '__main__':
 
     try:
             pf = file(pidfile,'r')
-            pid = int(pf.read().strip())
+            pid = pf.read().strip()
+            try:
+                pid = int(pid)
+            except ValueError:
+                pid = None
             pf.close()
     except IOError:
             pid = None

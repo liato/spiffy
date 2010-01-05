@@ -1,4 +1,5 @@
 import codecs
+import cPickle as pickle
 import datetime
 import hashlib
 import imp
@@ -637,9 +638,12 @@ class CommandInput(object):
             
 class QuickReplyWrapper(object): 
 
-    def __init__(self, bot, input): 
+    def __init__(self, bot, input):
         self.bot = bot
         self.input = input
+        if not hasattr(bot, 'pluginstorage_%s' % input.funcname.lower()):
+            setattr(bot, 'pluginstorage_%s' % input.funcname.lower(), Storage("data/%s.%s.db" % (bot.config['network'], input.funcname.lower())))
+        self.storage = getattr(bot, 'pluginstorage_%s' % input.funcname.lower())
 
     def __getattribute__(self, attr):
         try:
@@ -1289,4 +1293,17 @@ class BotFactory(protocol.ClientFactory):
 
     def clientConnectionFailed(self, connector, reason):
         self.clientConnectionLost(connector, reason)
-        
+
+class Storage(dict):
+    def __init__(self, filename):
+        self.filename = filename
+        self._load()
+
+    def save(self):
+        pickle.dump(dict(self), open(self.filename, 'wb'))
+
+    def _load(self):
+        if os.path.exists(self.filename):
+            data = pickle.load(open(self.filename, 'rb'))
+            self.clear()
+            self.update(data)
