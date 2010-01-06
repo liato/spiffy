@@ -551,7 +551,7 @@ class Bot(irc.IRCClient, object):
             e = failure.getErrorMessage().strip("'")
             if f == bot.BadInputError:
                 if input.sender and not bot.config.get('silent', False):
-                    if e:
+                    if e != 'None':
                         bot.msg(input.sender, "\x02Error:\x02 %s" % e)
                     if bot.doc[func.__name__][1]:
                         bot.msg(input.sender, bot.doc[func.__name__][1])
