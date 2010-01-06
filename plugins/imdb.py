@@ -81,11 +81,11 @@ class imdblib(object):
             if 'genre' in self.infodivs:
                 self.genres = [x.text for x in self.infodivs['genre'].findall('.//a') if '/Sections' in x.attrib.get('href')]
             try:
-                rating = html.get_element_by_id('tn15rating')
+                rating = movie.get_element_by_id('tn15rating')
                 if rating is not None:
-                    self.rating = rating.cssselect('div .meta b')[0].text
-                    self.votes = rating.cssselect('div .meta a')[0].text
-                    top = rating.cssselect('div .bottom a')
+                    self.rating = rating.cssselect('div .starbar-meta b')[0].text
+                    self.votes = rating.cssselect('div .starbar-meta a')[0].text
+                    top = rating.cssselect('div .starbar-special a')
                     if top:
                         self.top = top[0].text
             except:
