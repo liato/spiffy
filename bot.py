@@ -17,7 +17,7 @@ from utils import tounicode
 
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import lowDequote, numeric_to_symbolic, symbolic_to_numeric, split
-from twisted.internet import reactor, protocol
+from twisted.internet import reactor, protocol, threads
 from twisted.python import threadable
 threadable.init(1)
 
@@ -546,48 +546,30 @@ class Bot(irc.IRCClient, object):
                             bot.msg(input.sender, e)
                     return
 
-        class PluginThread(threading.Thread):
-            def __init__(self, target, bot, input):
-                threading.Thread.__init__(self)
-                self._target = target
-                self._bot = bot
-                self._input = input
-            def run(self):
-                try:
-                    self._target(self._bot, self._input)
-                except self._bot.BadInputError, e:
-                    if input.sender and not self._bot.config.get('silent', False):
-                        if e.value:
-                            self._bot.msg(input.sender, "\x02Error:\x02 %s" % e.value)
-                        if self._bot.doc[func.__name__][1]:
-                            self._bot.msg(input.sender, self._bot.doc[func.__name__][1])
-                        else:
-                            self._bot.msg(input.sender, 'Use %shelp %s for more info on how to use this command.'
-                                     % (self._bot.config.get('prefix',''), func.__name__))
-                except Exception, e:
-                    if self._bot.config.get('chandebug', True) and input.sender and not self._bot.config.get('silent', False):
-                        try:  
-                            import traceback
-                            trace = traceback.format_exc()
-                            print trace
-                            lines = list(reversed(trace.splitlines()))
-                   
-                            report = [lines[0].strip()]
-                            for line in lines: 
-                                line = line.strip()
-                                if line.startswith('File "'): 
-                                   report.append(line[0].lower() + line[1:])
-                                   break
-                            else:
-                                report.append('source unknown')
-                            self._bot.msg(input.sender, report[0] + ' (' + report[1] + ')')
-                        except Exception, e:
-                            self._bot.msg(input.sender, "Got an error: %s" % e)
+        def errorHandler(failure):
+            f = failure.trap(bot.BadInputError, Exception)
+            e = failure.getErrorMessage().strip("'")
+            if f == bot.BadInputError:
+                if input.sender and not bot.config.get('silent', False):
+                    if e:
+                        bot.msg(input.sender, "\x02Error:\x02 %s" % e)
+                    if bot.doc[func.__name__][1]:
+                        bot.msg(input.sender, bot.doc[func.__name__][1])
+                    else:
+                        bot.msg(input.sender, 'Use %shelp %s for more info on how to use this command.'
+                                 % (bot.config.get('prefix',''), func.__name__))
+            else:
+                if bot.config.get('chandebug', True) and input.sender and not bot.config.get('silent', False):
+                    try:
+                        failure.printTraceback
+                        bot.msg(input.sender, "\x02Unhandled error:")
+                        bot.msg(input.sender, failure.getTraceback())
+                    except Exception, e:
+                        bot.msg(input.sender, "Got an error: %s" % e)               
+                
 
-        #try:
-            #reactor.callInThread(func, bot, input)
-        t = PluginThread(func, bot, input)
-        t.start()
+        d = threads.deferToThread(func, bot, input)
+        d.addErrback(errorHandler) 
 
 
     def ctcpQuery_VERSION(self, user, channel, data):
