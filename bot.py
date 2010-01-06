@@ -1299,6 +1299,10 @@ class Storage(dict):
 
     def _load(self):
         if os.path.exists(self.filename):
-            data = pickle.load(open(self.filename, 'rb'))
-            self.clear()
-            self.update(data)
+            try:
+                data = pickle.load(open(self.filename, 'rb'))
+                self.clear()
+                self.update(data)
+            except Exception:
+                #Plugins with incompatible dbs will fail to load.
+                pass
