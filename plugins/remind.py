@@ -4,6 +4,8 @@ import re
 import sqlite3
 from threading import Timer
 
+from utils import humantime
+
 from parsedatetime import parsedatetime as pdt
 from twisted.internet import reactor
 
@@ -79,7 +81,7 @@ def formattell(tup):
     _,sender,receiver,msg,time = tup
     time = time.strftime("%H:%M:%S")
     
-    return "%s: [%s] <%s> tell %s %s" % (receiver, time, sender, receiver, msg)
+    return u"%s: [%s] <%s> tell %s %s" % (receiver, time, sender, receiver, msg)
                                                   
                                                   
 def savetell(self,sender,receiver,message,time):
@@ -143,8 +145,8 @@ def tell(self,input):
     if not m:
         raise self.BadInputError()
     tellee, msg = m.groups()
-    tellee = tellee.encode('utf-8')
-    msg = msg.encode('utf-8')
+    tellee = tellee
+    msg = msg
     
     time = datetime.datetime.now()
 
@@ -169,16 +171,6 @@ tell.rule = ['tell', 'ask']
 tell.usage = [("Give someone a message the next time they say something", "$pcmd <recipient> <message>")]
 tell.example = [("Deliver a message to Joe when he shows up", "$pcmd joe What's up?")]
 
-
-def humantime(seconds,style='tuple'):
-    m,s = divmod(seconds, 60)
-    h,m = divmod(m, 60)
-    d,h = divmod(h, 24)
-    w,d = divmod(d, 7)
-    if style == 'string':
-        return ((w and str(w)+"w " or "")+(d and str(d)+"d " or "")+(h and str(h)+"h " or "")+(m and str(m)+"m " or "")+(s and str(s)+"s" or "")).strip()
-    else:
-        return (w,d,h,m,s)
 
 def saveremind(self,sender,receiver,message,time,asktime,chan):
     dbname = "tellremind.%s.s3db" % self.config["network"]
@@ -239,7 +231,7 @@ def remind(self, input):
         i = input.args.rindex(" at")
         use_in = False
     else:
-        self.say(usage)
+        raise self.BadInputError()
         return
     
     try:
@@ -288,9 +280,9 @@ def remind(self, input):
         return
     
     if nick == input.nick:
-        self.say(u"I'll tell '%s' to you in %s!" % (task,humantime(seconds,'string')))
+        self.say(u"I'll tell '%s' to you in %s!" % (task, humantime(seconds)))
     else:
-        self.say(u"I'll tell '%s' to %s in %s!" % (task,nick,humantime(seconds,'string')))
+        self.say(u"I'll tell '%s' to %s in %s!" % (task, nick, humantime(seconds)))
 
     
     
