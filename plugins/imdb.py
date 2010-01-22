@@ -103,15 +103,13 @@ class imdblib(object):
             self.languages = self._infodiv('language', find='a')
             self.cast = []
             for x in movie.cssselect('table.cast tr'):
+                character = x.cssselect('.char a') or x.cssselect('.char')
+                if character:
+                    character = character[0].text and character[0].text.strip() or None
+    
                 name = x.cssselect('.nm a') or x.cssselect('.nm')
                 if name:
                     name = name[0].text.strip()
-                
-                character = x.cssselect('.char a') or x.cssselect('.char')
-                if character:
-                    character = character[0].text.strip()
-    
-                if name and character:
                     self.cast.append((name, character))
             
             try:
@@ -356,7 +354,7 @@ def imdb(self, input):
                 if movie.countries: self.say("\x02Country:\x02 %s" % ", ".join(movie.countries))
                 if movie.languages: self.say("\x02Language:\x02 %s" % ", ".join(movie.languages))
                 if movie.usercomment: self.say("\x02User comments:\x02 %s" % movie.usercomment)
-                if movie.cast: self.say("\x02Cast:\x02 %s" % ", ".join([name+" as "+cname for name, cname in movie.cast[:5]]))
+                if movie.cast: self.say("\x02Cast:\x02 %s" % ", ".join([cname and (name+" as "+cname) or name for name, cname in movie.cast[:5]]))
 
 
 imdb.rule = ["mdb", "imdb"]
