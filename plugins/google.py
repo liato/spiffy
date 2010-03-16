@@ -44,7 +44,7 @@ def google(self, input):
                 self.say('\x02%s\x02 - ( \x1f%s\x1f )' % (removehtml(m[x][1]), urllib.unquote(m[x][0])))
 
     else:
-        phenny.say('Your search for \x02%s\x02 did not return any results.' % input.args)
+        self.say('Your search for \x02%s\x02 did not return any results.' % input.args)
 
 google.rule = ["g","google"]
 google.usage = [("Search the World Wide Web using the Google search engine", "$pcmd <query>"),

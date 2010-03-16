@@ -18,7 +18,7 @@ def unnecessaryknowledge(self, input):
     data = data.replace('\r','').replace('\n','')
     m = re.search(r"<h2[^>]+?>(?P<text>.+?)</h2>",data,re.IGNORECASE)
     if not m:
-        phenny.say("Error: Unable to parse data.")
+        self.say("Error: Unable to parse data.")
         return
 
     msg = m.group("text")
