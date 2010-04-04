@@ -18,8 +18,7 @@ class RSS:
         self.added_by = added_by
         self.added_on = datetime.datetime.utcnow()
         self.chan = chan
-        self.nomatchwarned = False
-        self.lastvalue = None
+        self.visited = []
 
     def check(self):
         data = None
@@ -36,13 +35,19 @@ class RSS:
             return None
         
         newentries = []
-        if self.lastvalue:
+        if len(self.visited) == 0:
             for entry in entries:
-                if hashlib.sha224(str(entry)).hexdigest() == self.lastvalue:
-                    break
-                newentries.append(entry)
+                guid = entry.get('guid') or entry.get('link')
+                self.visited.append(guid)    
+        else:
+            for entry in entries:
+                guid = entry.get('guid') or entry.get('link')
+                if not guid in self.visited:
+                    if len(self.visited) >= 150:
+                        self.visited.pop(0)
+                    self.visited.append(guid)    
+                    newentries.append(entry)
 
-        self.lastvalue = hashlib.sha224(str(entries[0])).hexdigest()
         return newentries
 
     def getentries(self, num):
@@ -64,63 +69,54 @@ class RSS:
         return entries[:num]
 
 
-def setup(self): 
-    if not os.path.exists("data"):
-        os.mkdir("data")
-    self.rss_filename = os.path.join("data", '%s.rss.db' % self.config.get('network','_'))
-    self.rss_db = None
-
-    if os.path.exists(self.rss_filename):
-        f = open(self.rss_filename, 'rb')
+def setup(self, input):
+    if not 'sites' in self.storage:
+        self.storage['sites'] = []
+        self.storage.save()
+    if hasattr(self, 'rsscheck_thread'):
         try:
-            fc = f.read()
-            self.rss_db = pickle.loads(fc)
-        except EOFError:
+            self.rsscheck_thread.cancel()
+            del self.rsscheck_thread
+        except (RuntimeError, AttributeError):
             pass
-        f.close()
-    if not self.rss_db:
-        self.rss_db = []
-
-    t = threading.Timer(300, checksites, args=(self, None, savedb))
-    t.start()
-   
     
-def savedb(fn, data):
-    if data:
-        try:
-            f = open(fn, "wb")
-            pickle.dump(data, f, 2)
-            f.close()
-            return True
-        except:
-            return False
-    return False
+    self.rsscheck_thread = threading.Timer(60, checksites, args=(self,))
+    self.rsscheck_thread.start()
 
-def checksites(self, pattern=None, savefunc=None):
-    for site in self.rss_db:
+def checksites(self, pattern=None):
+    for site in self.storage['sites']:
         if (pattern or "") in site.url:
             try:
+                if pattern:
+                    reactor.callFromThread(self.msg, site.chan, "Checking %s..." % site.url)
                 res = site.check()
                 if res:
+                    if pattern:
+                        reactor.callFromThread(self.msg, site.chan, "Found %d new entries:" % len(res))
                     res.reverse()
                     for entry in res:
-                        reactor.callFromThread(self.msg, site.chan, "[RSS] \x02%s\x02 - \x1f%s" % (entry.get('title', ''), entry.get('link', '')))
+                        reactor.callFromThread(self.msg, site.chan, "[RSS] \x02%s\x02 - \x1f%s" % (decodehtml(entry.get('title', '')), entry.get('link', '')))
                         msg = entry.get('description', '')
                         msg = re.sub("<br\s?/?>", "\n", msg)
-                        msg = removehtml(msg)
+                        msg = decodehtml(removehtml(msg))
                         reactor.callFromThread(self.msg, site.chan, msg)
+                else:
+                    if pattern:
+                        reactor.callFromThread(self.msg, site.chan, "No new entries found.")
                         
             except Exception, e:
                 reactor.callFromThread(self.msg, site.chan, "\x02RSS:\x02 Error while checking %s. (%s)!" % (site.url, e))
-                
-    if not savefunc:        
-        savedb(self.rss_filename, self.rss_db)
-    else:
-        savefunc(self.rss_filename, self.rss_db)
-        
+    
+    self.storage.save()
     if not pattern:
-        t = threading.Timer(900, checksites, args=(self,None,savedb))
-        t.start()
+        try:
+            self.rsscheck_thread.cancel()
+            del self.rsscheck_thread
+        except (RuntimeError, AttributeError):
+            pass
+
+        self.rsscheck_thread = threading.Timer(300, checksites, args=(self,))
+        self.rsscheck_thread.start()
     
 
 def rss(self, input):
@@ -138,18 +134,18 @@ def rss(self, input):
     options, args = parser.parse_args(cmd.split())
 
     if options.remove:
-        for site in self.rss_db:
+        for site in self.storage['sites']:
             if options.remove in site.url:
                 self.say("Removing: %s" % site.url)
-                self.rss_db.remove(site)
-        savedb(self.rss_filename, self.rss_db)
+                self.storage['sites'].remove(site)
+        self.storage.save()
         
     elif options.display:
         if not args:
             self.say("\x02Error:\x02 A pattern must be provided when using switch -d")
             return
         
-        for site in self.rss_db:
+        for site in self.storage['sites']:
             if "".join(args) in site.url:
                 entries = site.getentries(options.display)
 
@@ -164,18 +160,18 @@ def rss(self, input):
         checksites(self, options.check)
 
     elif options.list:
-        for site in self.rss_db:
+        for site in self.storage['sites']:
             if ("".join(args) or "") in site.url:
                 self.say("Added by \x02%s\x02 on \x02%s\x02:" % (site.added_by, site.added_on))
                 self.say(  "\x02Url:  \x02 %s" % site.url)
 
-        if not self.rss_db:
+        if not self.storage['sites']:
             self.say("No feeds added yet!")
 
     elif args:
         url = " ".join(args)
 
-        for site in self.rss_db:
+        for site in self.storage['sites']:
             if url == site.url:
                 self.say("Feed already exists, try using the -l switch to check for it.")
                 return
@@ -194,12 +190,13 @@ def rss(self, input):
             self.say("Error: %s" % e)
             return
 
-        self.rss_db.append(site)
-        savedb(self.rss_filename, self.rss_db)
+        self.storage['sites'].append(site)
+        self.storage.save()
         self.say("Added!")
 
 
 rss.rule = ["rss"]
+rss.setup = setup
 rss.usage = [("Add a new feed","$pcmd <url>"),
              ("Remove feeds whose URLs contain pattern", "$pcmd -r <pattern"),
              ("Check feeds whose URLs contain patter", "$pcmd -c <pattern>"),
