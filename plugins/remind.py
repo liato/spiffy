@@ -9,7 +9,7 @@ from utils import humantime
 from parsedatetime import parsedatetime as pdt
 from twisted.internet import reactor
 
-def setup(self):
+def setup(self, input):
     self.tells = {}
 
     dbname = "tellremind.%s.s3db" % self.config["network"]
@@ -170,6 +170,7 @@ def tell(self,input):
 tell.rule = ['tell', 'ask']
 tell.usage = [("Give someone a message the next time they say something", "$pcmd <recipient> <message>")]
 tell.example = [("Deliver a message to Joe when he shows up", "$pcmd joe What's up?")]
+tell.setup = setup
 
 
 def saveremind(self,sender,receiver,message,time,asktime,chan):

@@ -96,7 +96,7 @@ class SteamStatus:
         
 
 
-def setup(self): 
+def setup(self, input): 
     fn = self.config['network'] + '.steamids.db'
     self.steam_filename = os.path.join('data', fn)
     if not os.path.exists(self.steam_filename): 
@@ -202,6 +202,7 @@ def steam(self, input):
 
 
 steam.rule = ['steam']
+steam.setup = setup
 steam.usage = [('Look upp the status for the given userid/useralias', '$pcmd <userid/useralias>'),
                ('Add a new useralias', '$pcmd -a <alias> <steamcommunityid>'),
                ('Remove a useralias', '$pcmd -r <alias>')]

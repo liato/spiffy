@@ -243,6 +243,11 @@ class Bot(irc.IRCClient, object):
                     func.event = func.event.upper()
        
                 self.plugins[func.name] = func
+
+                if hasattr(func, 'setup'):
+                    input = CommandInput(self, '', '', '', '', None, '', func.name)
+                    bot = QuickReplyWrapper(self, input)
+                    func.setup(bot, input)
                 
                 if isinstance(func.rule, str):
                     if '$nick' in func.rule:
@@ -264,8 +269,6 @@ class Bot(irc.IRCClient, object):
         if not function:
             name = os.path.basename(filename)[:-3]
             plugin = imp.load_source(name, filename)
-            if hasattr(plugin, 'setup'): 
-               plugin.setup(self)
             for name, func in vars(plugin).iteritems():
                 handlefunc(func)
             return plugin
