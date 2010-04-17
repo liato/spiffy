@@ -12,14 +12,24 @@ def sl(self, input):
     """Queries sl.se for train/bus times"""
     
     cmd = input.args
+    if input.command.lower() == "slf":
+        cmd = "-f "+cmd
     
-    m = re.search(r'(?P<later>sen|tidig)(?:are)?|(?P<start>[^,]+),\s*(?P<stop>[^,]+)(?:,\s*?(?:(?P<date>\d{4}-\d{2}-\d{2} [012]?[0-9][.:]?[0-5][0-9])|(?P<time>[01-2]?[0-9][.:]?[0-5][0-9])))?', cmd, re.I)
+    m = re.search(r'(?P<fl>-fl)|-fa (?P<fafrom>[^,]+),\s*?(?P<fato>[^,]+),\s*?(?P<faname>.+)|-fr (?P<frmatch>.+)|-f (?P<favorite>[^,]+)(?:,\s*?(?P<ftime>[01-2]?[0-9][.:]?[0-5][0-9]))?|(?P<later>sen|tidig)(?:are)?|(?P<start>[^,]+),\s*(?P<stop>[^,]+)(?:,\s*?(?:(?P<date>\d{4}-\d{2}-\d{2} [012]?[0-9][.:]?[0-5][0-9])|(?P<time>[01-2]?[0-9][.:]?[0-5][0-9])))?', cmd, re.I)
     if not m:
         raise self.BadInputError()
         return
         
     baseurl = """http://reseplanerare.sl.se/bin/query.exe/sn?REQ0JourneyStopsS0A=255&S=%s&REQ0JourneyStopsZ0A=255&Z=%s&start=yes&REQ0JourneyTime%3D%s&REQ0HafasSearchForw=%s"""
-    nick = input.nick
+    start = stop = sdate = stime = None
+    
+    stime = m.group("time") if m.group("time") else stime
+    sdate = m.group("date") if m.group("date") else sdate
+    user = input.nick.lower()
+    if not user in self.storage:
+        self.storage[user] = {}
+    db = self.storage[user]
+    
     
     if m.group("later"):
         if not hasattr(self.bot, "sl_posttarget"):
@@ -35,29 +45,56 @@ def sl(self, input):
         req = urllib2.Request(self.bot.sl_posttarget, earlat)
         data = urllib2.urlopen(req).read()
         data = decodehtml(data)
+        
+    if m.group("favorite"):
+        if m.group("favorite").lower() in db:
+            start, stop = db[m.group("favorite").lower().strip()]
+            stime = m.group("ftime") if m.group("ftime") else stime
+        else:
+            self.say("No such favorite, .sl -fl to list your favorites  or .sl -fa <from>, <to>, <name> to add a new.")
+            return
+
+    if m.group("fl"):
+        if len(db) > 0:
+            self.notice(input.nick, "\x02Your favorites:")
+            for name, dest in db.iteritems():
+                self.notice(input.nick, " %s: %s -> %s" % (name, dest[0], dest[1]))
+        else:
+            self.notice(input.nick, "No favorites added yet, use .sl -fa <from>, <to>, <name> to add a new favorite.")
+        return
+
+    elif m.group("fafrom"):
+        db[m.group("faname").strip()] = (m.group("fafrom").strip(), m.group("fato").strip())
+        self.storage.save()
+        self.notice(input.nick, "Favorite added!")
+        return
     
-    if m.group("start"):
-        start = m.group("start")
-        stop = m.group("stop")
-        tid = None
-        date = None
-        if m.group("time"):
-            tid = m.group("time")
-        if m.group("date"):
-            date = m.group("date")[11:]
-            tid = m.group("date")[0:10]
+    elif m.group("frmatch"):
+        frmatch = m.group("frmatch").lower()
+        for name, dest in db.items():
+            if frmatch in name.lower() or frmatch in dest[0].lower() or frmatch in dest[1].lower():
+                self.notice(input.nick, "Removing: %s: %s -> %s" % (name, dest[0], dest[1]))
+                del db[name]
+        self.storage.save()
+        return
+    
+    start = start or m.group("start")
+    stop = stop or m.group("stop")
+    if start:
+        if sdate:
+            stime = sdate[0:10]
+            sdate = sdate[11:]
             
 
-        if tid:
+        if stime:
             tpar = 0
         else:
             tpar = 1
-    
-            tid = str(self.localtime())[11:16]
+            stime = str(self.localtime())[11:16]
     
         datestring = ""
-        if date:
-            then = date.split("-")
+        if sdate:
+            then = sdate.split("-")
             then = datetime.date(int(then[0]),int(then[1]),int(then[2]))
             datestring = str(then.day) + "." + str(then.month) + "." + str(then.year)[-2:]
     
@@ -66,8 +103,8 @@ def sl(self, input):
         start = start.encode('latin_1')
         stop = stop.encode('latin_1')
     
-        queryurl = baseurl % (urllib.quote(start),urllib.quote(stop),tid,tpar)
-        if date:
+        queryurl = baseurl % (urllib.quote(start),urllib.quote(stop),stime,tpar)
+        if sdate:
             queryurl += "&REQ0JourneyDate=" + datestring
 
 
@@ -96,10 +133,10 @@ def sl(self, input):
                 self.say("error2 i sorry")
     
         if recheck:
-            if date:
+            if sdate:
                 queryurl += "&REQ0JourneyDate=" + datestring
                 
-            queryurl = baseurl % (urllib.quote(start),urllib.quote(stop),tid,tpar)
+            queryurl = baseurl % (urllib.quote(start),urllib.quote(stop),stime,tpar)
     
             #req = urllib2.Request(queryurl)
             data = urllib.urlopen(queryurl).read().replace("&nbsp;"," ")
@@ -146,9 +183,13 @@ def sl(self, input):
     self.say(b2)# "du är framme...."
     self.say(foot) # "restid xx minuter"
     
-sl.rule = ["sl"]
+sl.rule = ["sl", "slf"]
 sl.usage = [("Find out when and how to travel between two stations", "$pcmd <from>, <to>"),
             ("Perform a query and specify when you want to arrive", "$pcmd <from>, <to>, [YYYY-MM-DD] HH:MM"),
-            ("After having performed a query, find out when the next departure is", "$pcmd sen")]
+            ("After having performed a query, find out when the next or previous departure is", "$pcmd sen|tidigare"),
+            ("Add a trip to favorites", "$pcmd -fa <from>, <to>, <name>"),
+            ("Remove a trip from favorites", "$pcmd -fr <text to match>"),
+            ("List all your favorites", "$pcmd -fl"),
+            ("Find out when and how to travel using favorites", "$pcmd -f <name>[, <HH:MM>]")]
 sl.example = [("Find out how to go from T-Centralen to Medborgarplatsen", "$pcmd T-Centralen, Medborgarplatsen"),
               ("Find out when your train leaves tomorrow morning, if you want to arrive at 08:00", "$pcmd T-Centralen, Slussen, 08:00")]
