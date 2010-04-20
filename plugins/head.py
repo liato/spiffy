@@ -1,7 +1,7 @@
 import re
 import urllib2
 
-from utils import tounicode
+from utils import tounicode, decodehtml
 
 def head(self, input):
    """Fetches the headers of a web page"""
@@ -64,7 +64,7 @@ def title(self, input):
    if not title:
       self.say("Page has no title tag!")
       return
-   self.say("\x02Title:\x02 %s" % title.group(1).replace("\n",""))
+   self.say("\x02Title:\x02 %s" % decodehtml(title.group(1).replace("\n","")))
    
 title.rule = ["title"]
 title.usage = [("Fetch the title of a web page", "$pcmd <URL>"),
