@@ -98,17 +98,17 @@ class SteamStatus:
 
 def setup(self, input): 
     fn = self.config['network'] + '.steamids.db'
-    self.steam_filename = os.path.join('data', fn)
-    if not os.path.exists(self.steam_filename): 
+    self.bot.steam_filename = os.path.join('data', fn)
+    if not os.path.exists(self.bot.steam_filename): 
         try:
-            f = open(self.steam_filename, 'w')
+            f = open(self.bot.steam_filename, 'w')
         except OSError:
             pass
         else: 
             pickle.dump(dict(abc='123'), f)
             f.close()
-    f = open(self.steam_filename, 'r')
-    self.steamids = pickle.load(f)
+    f = open(self.bot.steam_filename, 'r')
+    self.bot.steamids = pickle.load(f)
     f.close()
     
 def savealiases(fn, data):
