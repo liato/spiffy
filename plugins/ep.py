@@ -45,9 +45,9 @@ class TVRage(object):
     
     def update(self):
         if self.repisode:
-            data = urllib.urlopen('http://www.tvrage.com/quickinfo.php?show=%s&ep=%s' % (urllib.quote(self.rshow.encode('utf-8')), urllib.quote(self.repisode.encode('utf-8')))).read()
+            data = urllib.urlopen('http://services.tvrage.com/tools/quickinfo.php?show=%s&ep=%s' % (urllib.quote(self.rshow.encode('utf-8')), urllib.quote(self.repisode.encode('utf-8')))).read()
         else:
-            data = urllib.urlopen('http://www.tvrage.com/quickinfo.php?show=%s' % urllib.quote(self.rshow.encode('utf-8'))).read()
+            data = urllib.urlopen('http://services.tvrage.com/tools/quickinfo.php?show=%s' % urllib.quote(self.rshow.encode('utf-8'))).read()
         data = data.replace('\r','').split('\n')
         for e in data:
             if '@' in e:
