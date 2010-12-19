@@ -10,10 +10,10 @@ def hi(self, input):
     greetreg = "(?:" + "|".join(greetings) + ")"
 
     # something like "<nick>, zup?"
-    a = re.match(self.nickname + "[,!:] ?" + greetreg + "[!?]*", cmd, re.I)
+    a = re.match("^" + self.nickname + "[,!:] ?" + greetreg + "[!?]*$", cmd, re.I)
 
     # something like "yo <nick>!"
-    b = re.match(greetreg + " " + self.nickname + "[!.]*", cmd, re.I)
+    b = re.match("^"+greetreg + " " + self.nickname + "[!.]*$", cmd, re.I)
 
     if a or b:
         if random.randint(0,1):
