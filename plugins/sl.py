@@ -1,11 +1,20 @@
-# -*- coding: latin-1 -*-
+# -*- coding: utf-8 -*-
 import datetime
 import re
 import time
 import urllib
 import urllib2
 
-from utils import decodehtml
+try:
+    import json
+except ImportError:
+    try:
+        import simplejson as json
+    except ImportError:
+        print "No json module found, unable to load sl plugin."
+        raise
+
+from utils import humantime
 
 
 def sl(self, input):
@@ -20,7 +29,10 @@ def sl(self, input):
         raise self.BadInputError()
         return
         
-    baseurl = """http://reseplanerare.sl.se/bin/query.exe/sn?REQ0JourneyStopsS0A=255&S=%s&REQ0JourneyStopsZ0A=255&Z=%s&start=yes&REQ0JourneyTime%3D%s&REQ0HafasSearchForw=%s"""
+    sl_api_key = self.config.get('sl_api_key', '')
+    sl_api_url = self.config.get('sl_api_url', '')
+
+
     start = stop = sdate = stime = None
     
     stime = m.group("time") if m.group("time") else stime
@@ -32,19 +44,9 @@ def sl(self, input):
     
     
     if m.group("later"):
-        if not hasattr(self.bot, "sl_posttarget"):
-            self.say("Sorry, didn't work!")
-            return
-        
-        if "sen" in m.group("later"):
-            earlat = {self.bot.sl_later:"&#197;k senare"}
-        else:
-            earlat = {self.bot.sl_earlier:"&#197;k tidigare"}
-    
-        earlat = urllib.urlencode(earlat)
-        req = urllib2.Request(self.bot.sl_posttarget, earlat)
-        data = urllib2.urlopen(req).read()
-        data = decodehtml(data)
+        self.say('Not implemented')
+        pass
+
         
     if m.group("favorite"):
         if m.group("favorite").lower() in db:
@@ -81,107 +83,56 @@ def sl(self, input):
     start = start or m.group("start")
     stop = stop or m.group("stop")
     if start:
+        isDepartureTime = True
+        if sdate or stime:
+            isDepartureTime = False
+
         if sdate:
-            stime = sdate[0:10]
-            sdate = sdate[11:]
-            
-
-        if stime:
-            tpar = 0
-        else:
-            tpar = 1
-            stime = str(self.localtime())[11:16]
-    
-        datestring = ""
-        if sdate:
-            then = sdate.split("-")
-            then = datetime.date(int(then[0]),int(then[1]),int(then[2]))
-            datestring = str(then.day) + "." + str(then.month) + "." + str(then.year)[-2:]
-    
-        baseurl = baseurl.encode('utf-8')
-        baseurl = urllib.unquote(baseurl)
-        start = start.encode('latin_1')
-        stop = stop.encode('latin_1')
-    
-        queryurl = baseurl % (urllib.quote(start),urllib.quote(stop),stime,tpar)
-        if sdate:
-            queryurl += "&REQ0JourneyDate=" + datestring
-
-
-        req = urllib2.Request(queryurl)
-        data = urllib2.urlopen(req).read().replace("&nbsp;"," ")
-        data = decodehtml(data)
-
-        # if we get a choice for the "from"-field
-        recheck = False
-        if re.search(r'<label for="from" class="ErrorText">Vilken', data, re.IGNORECASE):
-            recheck = True
-            match = re.search(r'<option value="S-0N1">([^[]+)\[', data, re.IGNORECASE)
-            if match:
-                start = match.group(1).strip()
-    
-            else:
-                self.say("error1, i sorry")
-    
-        if re.search(r'<label for="to" class="ErrorText">Vilken', data, re.IGNORECASE):
-            recheck = True
-            match = re.search(r'<option value="S-1N1">([^[]+)\[', data, re.IGNORECASE)
-            if match:
-                stop = match.group(1).strip()
-    
-            else:
-                self.say("error2 i sorry")
-    
-        if recheck:
-            if sdate:
-                queryurl += "&REQ0JourneyDate=" + datestring
+            sdate = sdate[:16]
+        elif stime:
+            if len(stime) is 1:
+              stime = '0%s:00' % stime
+            elif len(stime) is 2:
+                stime = stime+':00'
+            elif len(stime) is 4:
+                stime = stime[:2]+':'+stime[2:]
                 
-            queryurl = baseurl % (urllib.quote(start),urllib.quote(stop),stime,tpar)
-    
-            #req = urllib2.Request(queryurl)
-            data = urllib.urlopen(queryurl).read().replace("&nbsp;"," ")
-            data = decodehtml(data)
-    
+            sdate = str(self.localtime())[:11]+stime
+        else:
+            sdate = str(self.localtime())[:16]
+  
+        r = urllib2.urlopen("%sjourneyplanner/?key=%s" % (sl_api_url, sl_api_key),
+                            data=json.dumps({"origin":
+                                                {"id": 0,
+                                                 "longitude": 0,
+                                                 "latitude": 0,
+                                                 "name": start
+                                                 },
+                                             "isTimeDeparture": isDepartureTime,
+                                             "time": sdate,
+                                             "destination":
+                                                {"id": 0,
+                                                 "longitude": 0,
+                                                 "latitude": 0,
+                                                 "name": stop
+                                                 }
+                                            }))
 
-    #Find earlier/next post data
-    m = re.search(r'tidigare resor."\s*name="(?P<earlier>[^"]+)"', data, re.I | re.DOTALL)
-    if m:
-        self.bot.sl_earlier = m.group("earlier")
-
-    m = re.search(r'senare resor."\s*name="(?P<later>[^"]+)"', data, re.I | re.DOTALL)
-    if m:
-        self.bot.sl_later = m.group("later")
-        
-    m = re.search(r'tp_results_form"\s*action="(?P<posttarget>[^"]+)"', data, re.I | re.DOTALL)
-    if m:
-        self.bot.sl_posttarget = m.group("posttarget")
-
-
-
-    #Parse the page
-    match = re.search(r'<div class="FormAreaLight">.+<h3>([^<]+)</h3>.*-bottom:..?px;">.+?<p>(.*)</p><p>'
-                      ,data, re.DOTALL | re.IGNORECASE)
-    if match:
-            head = match.group(1)
-            body = match.group(2)
-    else:
-            head = body = None
-            self.say("machine no work")
+        data = r.read()
+        d = json.loads(data)
+        if d.get('numberOfTrips',0) == 0:
+            self.say('Couldn\'t find anything.')
             return
-    
-    
-    body = re.sub("</?[a-z]{1,2} ?/?>"," ",body)
-    body = re.sub("</?[a-z]{3,10}>",chr(2),body)
+        else:
+            trip = d['trips'][0]
+            duration = trip['duration'].split(':')
+            duration = humantime(int(duration[0])*60*60 + int(duration[1])*60)
+            self.say(u'FrÃ¥n \x02%s\x02 till \x02%s\x02, %s %s - %s (%s), %s %s:' % (trip['origin']['name'], trip['destination']['name'],                                                                                    trip['departureDate'], trip['departureTime'], trip['arrivalTime'], duration, (trip['changes'] if trip['changes'] is not 0 else 'inga'), ('byte' if trip['changes'] is 1 else 'byten')))
+            for subtrip in trip['subTrips']:
+                self.say(u'[%s] %s - %s \x02%s\x02 frÃ¥n \x02%s\x02 mot \x02%s\x02. Kliv av vid \x02%s' % (subtrip['transport']['type'], subtrip['departureTime'], subtrip['arrivalTime'],
+                                                                                                          subtrip['transport']['name'], subtrip['origin']['name'], subtrip['transport']['towards'], subtrip['destination']['name']))
+        
 
-    foot = body[body.index("Restid"):]
-    body = body[:body.index("Restid")].replace("  "," ")
-    b2 = body[body.index("Du är framme"):]
-    b1 = body[:body.index("Du är framme")]
-    
-    self.say("\x02%s\x02" % head)# "från xx till xx den blabla"
-    self.say(b1)# "tag ... från ..."
-    self.say(b2)# "du är framme...."
-    self.say(foot) # "restid xx minuter"
     
 sl.rule = ["sl", "slf"]
 sl.usage = [("Find out when and how to travel between two stations", "$pcmd <from>, <to>"),
