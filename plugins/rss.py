@@ -74,6 +74,11 @@ def setup(self, input):
     if not 'sites' in self.storage:
         self.storage['sites'] = []
         self.storage.save()
+
+    for site in self.storage["sites"]:
+        if not hasattr(site, "limit"):
+            site.limit = 0
+
     if hasattr(self, 'rsscheck_thread'):
         try:
             self.rsscheck_thread.cancel()
@@ -169,7 +174,7 @@ def rss(self, input):
                 self.say("Added by \x02%s\x02 on \x02%s\x02:" % (site.added_by, site.added_on))
                 self.say(  "\x02Url:  \x02 %s" % site.url)
                 if site.limit:
-                    self.say("Limited to max %d lines" % site.limit)
+                    self.say("    Limited to max %d lines" % site.limit)
 
         if not self.storage['sites']:
             self.say("No feeds added yet!")
