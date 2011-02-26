@@ -13,11 +13,12 @@ from twisted.internet import reactor
 
 
 class RSS:
-    def __init__(self, url=None, added_by=None, chan=None):
+    def __init__(self, url=None, added_by=None, chan=None, limit=0):
         self.url = url
         self.added_by = added_by
         self.added_on = datetime.datetime.utcnow()
         self.chan = chan
+        self.limit = limit
         self.visited = []
 
     def check(self):
@@ -99,6 +100,8 @@ def checksites(self, pattern=None):
                         msg = entry.get('description', '')
                         msg = re.sub("<br\s?/?>", "\n", msg)
                         msg = decodehtml(removehtml(msg))
+                        if site.limit:
+                            msg = "\n".join(msg.split("\n")[:site.limit])
                         reactor.callFromThread(self.msg, site.chan, msg)
                 else:
                     if pattern:
@@ -130,6 +133,7 @@ def rss(self, input):
     parser.add_option("-c", "--check", dest="check")
     parser.add_option("-l", "--list", dest="list", action="store_true")
     parser.add_option("-d", "--display", dest="display", type="int")
+    parser.add_option("-n", "--limit", dest="limit", type="int", default=0)
 
     options, args = parser.parse_args(cmd.split())
 
@@ -164,6 +168,8 @@ def rss(self, input):
             if ("".join(args) or "") in site.url:
                 self.say("Added by \x02%s\x02 on \x02%s\x02:" % (site.added_by, site.added_on))
                 self.say(  "\x02Url:  \x02 %s" % site.url)
+                if site.limit:
+                    self.say("Limited to max %d lines" % site.limit)
 
         if not self.storage['sites']:
             self.say("No feeds added yet!")
@@ -177,7 +183,7 @@ def rss(self, input):
                 return
             
         try:
-            site = RSS(url, input.nick, input.sender)
+            site = RSS(url, input.nick, input.sender, options.limit)
         except Exception, e:
             self.say("Error: %s" % e)
             return
@@ -198,6 +204,7 @@ def rss(self, input):
 rss.rule = ["rss"]
 rss.setup = setup
 rss.usage = [("Add a new feed","$pcmd <url>"),
+             ("Add a new feed, print max 3 lines per item","$pcmd -n 3 <url>"),
              ("Remove feeds whose URLs contain pattern", "$pcmd -r <pattern"),
              ("Check feeds whose URLs contain patter", "$pcmd -c <pattern>"),
              ("List all feeds", "$pcmd -l"),

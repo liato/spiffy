@@ -34,11 +34,12 @@ def alc(self,input):
     total = sum(v*(c/100.0) for v,c in g)
 
     b = chr(2)
-    self.say("%sTotal%s: %s%.2f cl%s pure alcohol weighing %s%.2f grams%s." % (b,b,b,
+    eqv = total/0.4
+    self.say("%sTotal%s: %s%.2f cl%s pure alcohol weighing %s%.2f grams%s (equivalent to %s%.2f cl%s vodka)" % (b,b,b,
                                                                           total,
                                                                           b,b,
                                                                           7.89*total,
-                                                                          b))        
+                                                                          b,b,eqv,b))        
 
 alc.rule = ["alc"]
 alc.usage = [("Calculate the amount of pure alcohol in a drink, given amount (cl) and percent alcohol by volume",

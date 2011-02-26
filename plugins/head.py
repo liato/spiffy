@@ -81,7 +81,7 @@ def noteurl(self, input):
     if not input.sender in self.bot.urls:
        self.bot.urls[input.sender] = {}
     
-    if url in self.bot.urls[input.sender]:
+    if url in self.bot.urls[input.sender] and not (input.nick == self.bot.urls[input.sender][url][1]):
         self.say("OLD!")
         self.say("[%s] <%s> %s" % (self.bot.urls[input.sender][url][0].strftime("%y%m%d %H:%M:%S"), self.bot.urls[input.sender][url][1], self.bot.urls[input.sender][url][2]))
     else:
