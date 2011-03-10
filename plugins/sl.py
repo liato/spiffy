@@ -41,12 +41,20 @@ def sl(self, input):
     if not user in self.storage:
         self.storage[user] = {}
     db = self.storage[user]
-    
+
+    laterTrip = False
+    laterTime = None
     
     if m.group("later"):
-        self.say('Not implemented yet')
-        pass
-
+        if not "lastTrip" in db:
+            self.say("No previous requests on record, do a proper query")
+            return
+        
+        laterTrip = True
+        
+        start, stop, depTime = db["lastTrip"]
+        laterTime = (depTime + datetime.timedelta(0,60))
+        sdate = laterTime.strftime("%Y-%m-%d %H:%M")
         
     if m.group("favorite"):
         if m.group("favorite").lower() in db:
@@ -84,7 +92,7 @@ def sl(self, input):
     stop = stop or m.group("stop")
     if start:
         isDepartureTime = True
-        if sdate or stime:
+        if (sdate or stime) and not laterTrip:
             isDepartureTime = False
 
         if sdate:
@@ -100,9 +108,7 @@ def sl(self, input):
             sdate = str(self.localtime())[:11]+stime
         else:
             sdate = str(self.localtime())[:16]
-
-        
-  
+ 
         r = urllib2.urlopen("%sjourneyplanner/?key=%s" % (sl_api_url, sl_api_key),
                             data=json.dumps({"origin":
                                                 {"id": 0,
@@ -150,7 +156,7 @@ def sl(self, input):
                 for t in trips:
                     departureString = t["departureDate"] + " " + t["departureTime"]
                     departureTime = datetime.datetime.strptime(departureString, "%d.%m.%y %H:%M")
-                    delta = self.localtime()-departureTime
+                    delta = (laterTime or self.localtime())-departureTime
                     if (delta.days*3600*24 + delta.seconds) <= 0:
                         bestTrip = t
                         break
@@ -159,6 +165,10 @@ def sl(self, input):
             if not trip:
                 self.say('Couldn\'t find anything.')
                 return
+
+            departureString = trip["departureDate"] + " " + trip["departureTime"]
+            departureTime = datetime.datetime.strptime(departureString, "%d.%m.%y %H:%M")
+            db["lastTrip"] = (start, stop, departureTime)
                 
             
             duration = trip['duration'].split(':')
