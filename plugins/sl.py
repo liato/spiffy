@@ -138,7 +138,7 @@ def sl(self, input):
                     arrivalString = t["arrivalDate"] + " " + t["arrivalTime"]
                     arrivalTime = datetime.datetime.strptime(arrivalString, "%d.%m.%y %H:%M")
                     delta = desiredTime-arrivalTime
-                    if delta.total_seconds() >= 0:
+                    if (delta.days*3600*24 + delta.seconds) >= 0:
                         bestTrip = t
                     else:
                         break
@@ -151,7 +151,7 @@ def sl(self, input):
                     departureString = t["departureDate"] + " " + t["departureTime"]
                     departureTime = datetime.datetime.strptime(departureString, "%d.%m.%y %H:%M")
                     delta = datetime.datetime.now()-departureTime
-                    if delta.total_seconds() <= 0:
+                    if (delta.days*3600*24 + delta.seconds) <= 0:
                         bestTrip = t
                         break
                 trip = bestTrip
