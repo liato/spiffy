@@ -150,7 +150,7 @@ def sl(self, input):
                 for t in trips:
                     departureString = t["departureDate"] + " " + t["departureTime"]
                     departureTime = datetime.datetime.strptime(departureString, "%d.%m.%y %H:%M")
-                    delta = datetime.datetime.now()-departureTime
+                    delta = self.localtime()-departureTime
                     if (delta.days*3600*24 + delta.seconds) <= 0:
                         bestTrip = t
                         break
