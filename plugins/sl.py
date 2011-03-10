@@ -44,7 +44,7 @@ def sl(self, input):
     
     
     if m.group("later"):
-        self.say('Not implemented')
+        self.say('Not implemented yet')
         pass
 
         
@@ -100,6 +100,8 @@ def sl(self, input):
             sdate = str(self.localtime())[:11]+stime
         else:
             sdate = str(self.localtime())[:16]
+
+        
   
         r = urllib2.urlopen("%sjourneyplanner/?key=%s" % (sl_api_url, sl_api_key),
                             data=json.dumps({"origin":
@@ -124,10 +126,31 @@ def sl(self, input):
             self.say('Couldn\'t find anything.')
             return
         else:
-            trip = d['trips'][0]
+            trips = d["trips"]
+            trip = None
+
+            if not isDepartureTime: # user specified a desired time of arrival
+                desiredTime = datetime.datetime.strptime(sdate,"%Y-%m-%d %H:%M")
+
+                bestTrip = None
+
+                for t in trips:
+                    arrivalString = t["arrivalDate"] + " " + t["arrivalTime"]
+                    arrivalTime = datetime.datetime.strptime(arrivalString, "%d.%m.%y %H:%M")
+                    delta = desiredTime-arrivalTime
+                    if delta.total_seconds() >= 0:
+                        bestTrip = t
+                    else:
+                        break
+                    
+                trip = bestTrip
+            else: # user wants to go as soon as possible
+                trip = d["trips"][0]
+            
             duration = trip['duration'].split(':')
             duration = humantime(int(duration[0])*60*60 + int(duration[1])*60)
-            self.say(u'Från \x02%s\x02 till \x02%s\x02, %s %s - %s (%s), %s %s:' % (trip['origin']['name'], trip['destination']['name'],                                                                                    trip['departureDate'], trip['departureTime'], trip['arrivalTime'], duration, (trip['changes'] if trip['changes'] is not 0 else 'inga'), ('byte' if trip['changes'] is 1 else 'byten')))
+            readableDate = datetime.datetime.strptime(trip["departureDate"], "%d.%m.%y").strftime("%Y-%m-%d")
+            self.say(u'Från \x02%s\x02 till \x02%s\x02, %s %s - %s (%s), %s %s:' % (trip['origin']['name'], trip['destination']['name'], readableDate, trip['departureTime'], trip['arrivalTime'], duration, (trip['changes'] if trip['changes'] is not 0 else 'inga'), ('byte' if trip['changes'] is 1 else 'byten')))
             for subtrip in trip['subTrips']:
                 self.say(u'[%s] %s - %s \x02%s\x02 från \x02%s\x02 mot \x02%s\x02. Kliv av vid \x02%s' % (subtrip['transport']['type'], subtrip['departureTime'], subtrip['arrivalTime'],
                                                                                                           subtrip['transport']['name'], subtrip['origin']['name'], subtrip['transport']['towards'], subtrip['destination']['name']))
