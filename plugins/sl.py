@@ -151,7 +151,6 @@ def sl(self, input):
                     departureString = t["departureDate"] + " " + t["departureTime"]
                     departureTime = datetime.datetime.strptime(departureString, "%d.%m.%y %H:%M")
                     delta = datetime.datetime.now()-departureTime
-                    self.say(delta.total_seconds())
                     if delta.total_seconds() <= 0:
                         bestTrip = t
                         break
