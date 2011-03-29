@@ -95,3 +95,102 @@ def setup(self, input):
     self.bot.lasturl = {}
     
 noteurl.setup = setup
+
+
+def atsetup(self, input):
+    if not hasattr(self.bot, "pluginstorage_at"):
+        self.bot.pluginstorage_at = Storage("data/%s.%s.db" % (self.bot.config['network'], "at"))
+
+def at(self, input):
+
+    if not "autotitle" in self.storage:
+        self.storage["autotitle"] = []
+    
+    cmd = input.args or ""
+    
+    parser = self.OptionParser()
+    parser.add_option("-a", "--add", dest="add")
+    parser.add_option("-r", "--remove", dest="remove")
+    parser.add_option("-l", "--list", dest="list", action="store_true")
+
+    options, args = parser.parse_args(cmd.split())
+
+    if options.add:
+        if not options.add in self.storage["autotitle"]:
+            self.say("Added '%s'" % options.add)
+            self.storage["autotitle"].append(options.add)
+            self.storage.save()
+            
+    elif options.remove:
+        l = [p for p in self.storage["autotitle"] if re.search(options.remove, p, re.I)]
+
+        for p in l:
+            self.say("Removing '%s'" % p)
+            self.storage["autotitle"].remove(p)
+        self.storage.save()
+            
+    elif options.list:
+        if not self.storage["autotitle"]:
+            self.say("No patterns added yet")
+            return
+        
+        if not args: # print all patterns
+            self.say("\x02Autotitle patterns:\x02 ")
+            for i,p in enumerate(self.storage["autotitle"]):
+                self.say("%d. %s" % (i+1,p))
+        else:
+            arg = args[0]
+            self.say("\x02Autotitle patterns matching '%s':\x02" % arg)
+
+            matches = [p for p in self.storage["autotitle"] if re.search(arg, p, re.I)]
+            
+            for i,p in enumerate(matches):
+                self.say("%d. %s" % (i+1,p))
+    else:
+        self.say(self.bot.doc["at"][1])
+
+at.rule = ["at"]
+at.usage = [("Add a new pattern","$pcmd -a <pattern>"),
+            ("List all patterns","$pcmd -l"),
+            ("List only certain patterns","$pcmd -l <pattern>"),
+            ("Remove a pattern","$pcmd -r <pattern>")]
+at.example = [("Add a pattern for 'reddit'", "$pcmd -a reddit")]
+at.setup = atsetup
+
+
+def autotitle(self, input):
+    """Automatically shows the title for specified sites"""
+
+    if hasattr(self.bot,"pluginstorage_at"):
+        self.storage = self.bot.pluginstorage_at
+    else:
+        self.say("Patterns not loaded, hopefully this should never happen")
+
+    matches = re.findall(r"(https?://[^ ]+|www\.[^ ]+)", input.args, re.I)
+    if not matches:
+       return
+
+    for m in matches:
+        url = m.encode('utf-8')
+        if not url.startswith("http"):
+            url = "http://" + url
+
+        for p in self.storage["autotitle"]:
+            if re.search(p, url, re.I):
+                try:
+                    page = tounicode(urllib2.urlopen(url).read())
+                    title = re.search('<title>(.*?)</title>', page, re.I | re.MULTILINE | re.DOTALL)
+                    if not title:
+                        self.say("Page has no title tag!")
+                        return
+                    title = decodehtml(title.group(1).replace("\n","")).strip()
+                    title = re.sub(r"\s+", " ", title)
+                    self.say("\x02Title:\x02 %s" % title)
+                except urllib2.URLError, e:
+                    self.say('Error: Invalid url.')
+
+autotitle.rule = r".*"
+
+
+
+
