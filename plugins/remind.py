@@ -141,6 +141,41 @@ def tell(self,input):
     "Delivers a message to a recipient the next time he or she says something."
     teller = input.nick
 
+    if input.args.startswith("-l"):
+        dbname = "tellremind.%s.s3db" % self.config["network"]
+
+        if not input.sender.startswith("#"):
+            return
+            
+        try:
+            conn = sqlite3.connect(os.path.join("data",dbname))
+        except:
+            self.say("Could not open tell/remind database!")
+            return
+        
+        c = conn.cursor()
+        try:
+            c.execute("select * from tells")
+        except:
+            self.say("Couldn't read from the database!")
+            return
+        rows = c.fetchall()
+        c.close()
+        conn.close()
+
+        if not rows:
+            self.say("No tells added yet")
+            return
+
+        for row in rows:
+            id,sender,receiver,msg,time = row
+            time = datetime.datetime.strptime(time,"%Y-%m-%d %H:%M:%S")
+
+            self.say(u"Tell from %s to %s, added on %s:" %(sender,receiver,time))
+            self.say(u'  "%s"' % msg)
+
+        return
+
     m = re.search(r'([\S,]+) (.+)', input.args, re.I)
     if not m:
         raise self.BadInputError()
@@ -168,7 +203,8 @@ def tell(self,input):
     self.say("%s: I'll pass that along!" % teller)
     
 tell.rule = ['tell', 'ask']
-tell.usage = [("Give someone a message the next time they say something", "$pcmd <recipient> <message>")]
+tell.usage = [("Give someone a message the next time they say something", "$pcmd <recipient> <message>"),
+              ("List all the tells currently waiting to be delivered", "$pcmd -l")]
 tell.example = [("Deliver a message to Joe when he shows up", "$pcmd joe What's up?")]
 tell.setup = setup
 
@@ -221,6 +257,46 @@ def tryremind(self,id,sender,receiver,message,time,chan):
 
 def remind(self, input):
     "Delivers a message at a specific time, either relative or absolute."
+
+    if input.args.startswith("-l"):
+        dbname = "tellremind.%s.s3db" % self.config["network"]
+
+        if not input.sender.startswith("#"):
+            return
+            
+        try:
+            conn = sqlite3.connect(os.path.join("data",dbname))
+        except:
+            self.say("Could not open tell/remind database!")
+            return
+        
+        c = conn.cursor()
+        try:
+            c.execute("select * from reminds")
+        except:
+            self.say("Couldn't read from the database!")
+            return
+        now = self.localtime()
+        rows = c.fetchall()
+        c.close()
+        conn.close()
+
+        rows = [e for e in rows if e[-1] == input.sender]
+
+        if not rows:
+            self.say("No reminds added yet")
+            return
+
+        for row in rows:
+            id,sender,receiver,msg,time,asktime,chan = row
+            time = datetime.datetime.strptime(time,"%Y-%m-%d %H:%M:%S")
+            asktime = datetime.datetime.strptime(asktime,"%Y-%m-%d %H:%M:%S")
+
+            self.say(u"Reminder from %s to %s, added on %s, will be delivered on %s:" %(sender,receiver,asktime,time))
+            self.say(u'  "%s"' % msg)
+        return
+
+    
     i = 0
     use_in = None
     if re.search(r" in (\d{1,} ?d(?:ay)?s?)? ?(-?\d{1,} ?h(?:our)?s?)? ?(-?\d{1,} ?m(?:inute|in)?s?)? ?(-?\d{1,} ?s(?:econd|ec)?s?)?",input.args):
@@ -296,16 +372,11 @@ def remind(self, input):
 remind.rule = ["remind"]
 
 remind.usage = [("Add a reminder to be delivered at a specific time", "$pcmd <recipient> <message> at <[date]time>"),
-              ("Add a reminder to be delivered in a certain amount of time", "$pcmd <recipient> <message> in <time>")]
+              ("Add a reminder to be delivered in a certain amount of time", "$pcmd <recipient> <message> in <time>"),
+                ("List all the reminds currently in the system", "$pcmd -l")]
 remind.example = [("Remind yourself to watch Lost", "$nick, remind me Watch Lost! at 20:55"),
                 ("Remind yourself to do whatever on New Year's Eve 2039", "$pcmd me Party like it's 1999! at 2039-12-31 20:00"),
                 ("Remind Joe to give pick you up in a week", "$pcmd Joe Pick me up at the airport! in 1 week")]
-
-
-
-
-
-
 
 
 
