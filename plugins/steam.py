@@ -15,6 +15,23 @@ def isnumeric(str):
     return numericprog.match(str) is not None
 
 
+import os
+import pickle
+import re
+import urllib2
+
+from BeautifulSoup import BeautifulSoup as bs
+
+try:
+    from hlquery import HLserver
+except ImportError:
+    HLserver = None
+
+numericprog = re.compile('^[0-9]+$')
+def isnumeric(str):
+    return numericprog.match(str) is not None
+
+
 class SteamStatus:
 
     def __init__(self, id=None, steamalias=False, search=None):
@@ -38,7 +55,7 @@ class SteamStatus:
             
         data = bs(data, convertEntities=bs.HTML_ENTITIES)
         try:
-            self.username = data.find(id='mainContents').h1.string
+            self.username = data.find(id="mainContents").h1.contents[0].strip()
         except Exception:
             return
         try:
@@ -130,10 +147,21 @@ def steam(self, input):
     parser.add_option('-r', '--remove', dest='remove', default=None)
     parser.add_option('-a', '--add', dest='add', nargs=2)
     parser.add_option('-e', '--extended', dest='extended', action='store_true', default=False)
+    parser.add_option('-l', '--list', dest='list', action='store_true')
     options, args = parser.parse_args((input.args or '').split())
     
     if options.remove and options.add:
         parser.error('Options -r and -a are mutually exclusive.')
+
+    if options.list:
+        if len(self.bot.steamids) == 0:
+            self.say("No aliases added yet.")
+            return
+        
+        self.say(chr(2) + u"Alias -> Steam community ID:" + chr(2))
+        for k,v in self.bot.steamids.iteritems():
+            self.say("   %s -> %s" % (k,v))
+        return
     
     if not options.remove and not options.add:
         steamids = ' '.join(args).split(',')
@@ -142,7 +170,10 @@ def steam(self, input):
             steamid = steamid.strip()
             if steamid.lower() in self.bot.steamids:
                 id = self.bot.steamids[steamid.lower()]
-                status = SteamStatus(id)
+                if isnumeric(id):
+                    status = SteamStatus(id)
+                else:
+                    status = SteamStatus(id, True)
             else:
                 id = steamid
                 if isnumeric(id):                
